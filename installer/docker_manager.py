@@ -141,24 +141,49 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
                 universal_newlines=True
             )
             
-            # Используем Progress для динамического отображения
-            current_image = None
-            current_status = "Ожидание..."
+            # Определяем образы из docker-compose.yml
+            images_to_track = {}
+            try:
+                if file:
+                    compose_file = file
+                else:
+                    compose_file = "docker-compose.yml"
+                
+                with open(compose_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Ищем образы
+                    if 'n8nio/n8n' in content or 'n8n' in content.lower():
+                        images_to_track['n8n'] = {'status': 'waiting', 'task_id': None}
+                    if 'langflowai/langflow' in content or 'langflow' in content.lower():
+                        images_to_track['langflow'] = {'status': 'waiting', 'task_id': None}
+                    if 'supabase' in content.lower():
+                        images_to_track['supabase'] = {'status': 'waiting', 'task_id': None}
+                    if 'ollama' in content.lower():
+                        images_to_track['ollama'] = {'status': 'waiting', 'task_id': None}
+            except Exception:
+                # Если не удалось прочитать файл, используем стандартный набор
+                images_to_track = {
+                    'n8n': {'status': 'waiting', 'task_id': None},
+                    'langflow': {'status': 'waiting', 'task_id': None},
+                    'supabase': {'status': 'waiting', 'task_id': None}
+                }
+            
             pull_output = []
+            current_image_name = None
             
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TimeRemainingColumn(),
                 console=console,
                 transient=False
             ) as progress:
-                task = progress.add_task(
-                    f"[cyan]Загрузка образов...[/cyan]",
-                    total=100
-                )
+                # Создаем задачи для каждого образа
+                for img_name in images_to_track.keys():
+                    task_id = progress.add_task(
+                        f"[dim]{img_name.capitalize()}: ожидание...[/dim]",
+                        total=None
+                    )
+                    images_to_track[img_name]['task_id'] = task_id
                 
                 try:
                     for line in pull_process.stdout:
@@ -169,50 +194,108 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
                         pull_output.append(line)
                         line_lower = line.lower()
                         
-                        # Определяем текущий образ
-                        if 'pulling' in line_lower and 'image' in line_lower:
-                            # Извлекаем имя образа
-                            match = re.search(r'pulling.*?image[:\s]+([^\s]+)', line_lower)
-                            if match:
-                                current_image = match.group(1).split('/')[-1]
-                                current_status = f"Загрузка {current_image}..."
-                                progress.update(task, description=f"[cyan]{current_status}[/cyan]")
+                        # Определяем, какой образ загружается - улучшенный парсинг
+                        detected_image = None
                         
-                        # Парсим процент загрузки
-                        percent_match = re.search(r'(\d+(?:\.\d+)?)%', line)
-                        if percent_match:
-                            try:
-                                percent = float(percent_match.group(1))
-                                progress.update(task, completed=percent)
-                            except ValueError:
-                                pass
+                        # Паттерн 1: "Pulling n8n ..." или "Pulling langflow ..." (имя сервиса)
+                        service_match = re.search(r'pulling\s+([a-z-]+)', line_lower)
+                        if service_match:
+                            service_name = service_match.group(1)
+                            # Проверяем соответствие с отслеживаемыми образами
+                            for img_name in images_to_track.keys():
+                                if service_name == img_name or service_name.replace('-', '') == img_name.replace('-', ''):
+                                    detected_image = img_name
+                                    break
                         
-                        # Определяем статус
-                        if 'pull complete' in line_lower or 'already exists' in line_lower:
-                            if current_image:
-                                current_status = f"✓ {current_image} загружен"
-                                progress.update(task, description=f"[green]{current_status}[/green]", completed=100)
-                                current_image = None
-                        elif 'downloading' in line_lower:
-                            current_status = f"Скачивание {current_image or 'образа'}..."
-                            progress.update(task, description=f"[cyan]{current_status}[/cyan]")
-                        elif 'extracting' in line_lower:
-                            current_status = f"Распаковка {current_image or 'образа'}..."
-                            progress.update(task, description=f"[cyan]{current_status}[/cyan]")
-                        elif 'verifying' in line_lower:
-                            current_status = f"Проверка {current_image or 'образа'}..."
-                            progress.update(task, description=f"[yellow]{current_status}[/yellow]")
-                        elif 'error' in line_lower or 'failed' in line_lower:
-                            current_status = f"❌ Ошибка: {line[:50]}"
-                            progress.update(task, description=f"[red]{current_status}[/red]")
+                        # Паттерн 2: полное имя образа в строке (n8nio/n8n, langflowai/langflow и т.д.)
+                        if not detected_image:
+                            if 'n8nio/n8n' in line_lower or 'n8nio/n8n:' in line:
+                                detected_image = 'n8n'
+                            elif 'langflowai/langflow' in line_lower or 'langflowai/langflow:' in line:
+                                detected_image = 'langflow'
+                            elif 'supabase/postgres' in line_lower or 'supabase/postgres:' in line:
+                                detected_image = 'supabase'
+                            elif 'supabase/studio' in line_lower or 'supabase/studio:' in line:
+                                detected_image = 'supabase'
+                            elif 'ollama/ollama' in line_lower or 'ollama/ollama:' in line:
+                                detected_image = 'ollama'
+                        
+                        # Паттерн 3: по ключевым словам в контексте загрузки
+                        if not detected_image:
+                            if ('n8n' in line_lower and ('pulling' in line_lower or 'image' in line_lower)) and 'n8nio' not in line_lower:
+                                # Проверяем, что это не ложное срабатывание
+                                if 'supabase' not in line_lower:
+                                    detected_image = 'n8n'
+                            elif ('langflow' in line_lower and ('pulling' in line_lower or 'image' in line_lower)) and 'langflowai' not in line_lower:
+                                detected_image = 'langflow'
+                            elif ('supabase' in line_lower and ('pulling' in line_lower or 'image' in line_lower)):
+                                detected_image = 'supabase'
+                            elif ('ollama' in line_lower and ('pulling' in line_lower or 'image' in line_lower)):
+                                detected_image = 'ollama'
+                        
+                        # Обновляем текущий образ, если обнаружен
+                        if detected_image and detected_image in images_to_track:
+                            if current_image_name != detected_image:
+                                current_image_name = detected_image
+                                task_id = images_to_track[detected_image]['task_id']
+                                images_to_track[detected_image]['status'] = 'pulling'
+                                progress.update(
+                                    task_id,
+                                    description=f"[cyan]{detected_image.capitalize()}: загрузка...[/cyan]"
+                                )
+                        
+                        # Обновляем статус текущего образа
+                        if current_image_name and current_image_name in images_to_track:
+                            task_id = images_to_track[current_image_name]['task_id']
+                            
+                            # Определяем этап загрузки
+                            if 'downloading' in line_lower or 'pulling' in line_lower:
+                                progress.update(
+                                    task_id,
+                                    description=f"[cyan]{current_image_name.capitalize()}: скачивание...[/cyan]"
+                                )
+                            elif 'extracting' in line_lower:
+                                progress.update(
+                                    task_id,
+                                    description=f"[yellow]{current_image_name.capitalize()}: распаковка...[/yellow]"
+                                )
+                            elif 'verifying' in line_lower or 'verifying checksum' in line_lower:
+                                progress.update(
+                                    task_id,
+                                    description=f"[yellow]{current_image_name.capitalize()}: проверка...[/yellow]"
+                                )
+                            elif 'pull complete' in line_lower or 'already exists' in line_lower or 'up to date' in line_lower:
+                                progress.update(
+                                    task_id,
+                                    description=f"[green]✓ {current_image_name.capitalize()}: загружен[/green]"
+                                )
+                                images_to_track[current_image_name]['status'] = 'complete'
+                                current_image_name = None
+                            elif 'error' in line_lower or 'failed' in line_lower:
+                                progress.update(
+                                    task_id,
+                                    description=f"[red]❌ {current_image_name.capitalize()}: ошибка[/red]"
+                                )
+                                images_to_track[current_image_name]['status'] = 'error'
                     
                     pull_return_code = pull_process.wait(timeout=600)
                     
+                    # Обновляем все задачи на завершенные
                     if pull_return_code == 0:
-                        progress.update(task, description="[green]✓ Все образы загружены[/green]", completed=100)
+                        for img_name, info in images_to_track.items():
+                            if info['status'] != 'complete':
+                                progress.update(
+                                    info['task_id'],
+                                    description=f"[green]✓ {img_name.capitalize()}: готов[/green]"
+                                )
                 except subprocess.TimeoutExpired:
                     pull_process.kill()
-                    progress.update(task, description="[red]❌ Таймаут при загрузке[/red]")
+                    for img_name, info in images_to_track.items():
+                        if info['status'] != 'complete':
+                            progress.update(
+                                info['task_id'],
+                                description=f"[red]❌ {img_name.capitalize()}: таймаут[/red]"
+                            )
                     console.print("\n[red]❌ Таймаут при загрузке образов (более 10 минут)[/red]")
                     return False
             

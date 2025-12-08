@@ -172,11 +172,12 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
     # Но нужно добавить env_file если его нет
     if 'env_file:' not in content and 'x-env-file:' not in content:
         import re
-        # Добавляем x-env-file в начало файла после version
-        content = content.replace(
-            "version: '3.8'\n",
-            "version: '3.8'\n\nx-env-file: &env-file\n  env_file:\n    - .env\n\n"
-        )
+        # Убираем устаревший version и добавляем x-env-file
+        # Удаляем строку version если есть
+        content = re.sub(r"^version:\s*['\"]?3\.8['\"]?\s*\n", "", content, flags=re.MULTILINE)
+        # Добавляем x-env-file в начало файла
+        if not content.startswith('x-env-file'):
+            content = "x-env-file: &env-file\n  env_file:\n    - .env\n\n" + content
         # Добавляем ссылку на env_file в каждый сервис
         # Ищем начало каждого сервиса (строки "  имя_сервиса:") и добавляем после них env_file
         # Заменяем паттерн: "  имя:\n    image:" на "  имя:\n    <<: *env-file\n    image:"

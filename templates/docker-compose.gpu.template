@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   n8n:
     image: n8nio/n8n:latest
@@ -76,6 +74,15 @@ services:
     volumes:
       - supabase_data:/var/lib/postgresql/data
     restart: unless-stopped
+    entrypoint: |
+      sh -c "
+        if [ ! -d /var/lib/postgresql/data/pgdata ]; then
+          mkdir -p /var/lib/postgresql/data/pgdata
+        fi
+        chown -R postgres:postgres /var/lib/postgresql/data
+        chmod 700 /var/lib/postgresql/data/pgdata
+        exec docker-entrypoint.sh postgres -c listen_addresses='*'
+      "
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

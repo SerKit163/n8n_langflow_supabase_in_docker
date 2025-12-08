@@ -181,44 +181,110 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
     if routing_mode == 'subdomain':
         console.print("\n[bold cyan]📝 КОНФИГУРАЦИЯ СИСТЕМЫ:[/bold cyan]")
         console.print("\n[cyan]🌐 Домены[/cyan]")
-        console.print("[yellow]💡[/yellow] Введите базовый домен, система автоматически сформирует поддомены")
-        console.print("[yellow]💡[/yellow] Или введите '-' для пропуска (система будет работать по IP/localhost)\n")
+        console.print("[yellow]💡[/yellow] Домены опциональны. Если не указаны, доступ будет по IP адресу сервера\n")
         
-        while True:
-            base_domain = Prompt.ask("Базовый домен (пример: site.ru) или '-'", default="-")
-            if base_domain == '-':
-                break
+        # Выбор режима ввода
+        use_auto = Confirm.ask(
+            "Автоматически сформировать поддомены из базового домена?",
+            default=True
+        )
+        
+        if use_auto:
+            # АВТОМАТИЧЕСКИЙ РЕЖИМ
+            console.print("\n[yellow]💡[/yellow] Введите базовый домен, система автоматически сформирует поддомены")
+            console.print("[yellow]💡[/yellow] Или введите '-' для пропуска (система будет работать по IP/localhost)\n")
             
-            # Валидация базового домена
-            is_valid, error = validate_domain(base_domain)
-            if not is_valid:
-                console.print(f"[red]❌ {error}[/red]")
-                continue
+            while True:
+                base_domain = Prompt.ask("Базовый домен (пример: site.ru) или '-'", default="-")
+                if base_domain == '-':
+                    break
+                
+                # Валидация базового домена
+                is_valid, error = validate_domain(base_domain)
+                if not is_valid:
+                    console.print(f"[red]❌ {error}[/red]")
+                    continue
+                
+                # Автоматически формируем поддомены для основных сервисов
+                generated_domains = {
+                    'n8n_domain': f"n8n.{base_domain}",
+                    'langflow_domain': f"langflow.{base_domain}",
+                    'supabase_domain': f"supabase.{base_domain}"
+                }
+                
+                # Показываем сформированные поддомены
+                console.print("\n[green]✓ Сформированные поддомены:[/green]")
+                console.print(f"  N8N: [cyan]{generated_domains['n8n_domain']}[/cyan]")
+                console.print(f"  Langflow: [cyan]{generated_domains['langflow_domain']}[/cyan]")
+                console.print(f"  Supabase: [cyan]{generated_domains['supabase_domain']}[/cyan]")
+                
+                # Подтверждение основных доменов
+                if Confirm.ask("\nИспользовать эти поддомены?", default=True):
+                    domains_config.update(generated_domains)
+                    
+                    # Спрашиваем про Ollama отдельно, если доступен
+                    if ollama_available:
+                        console.print("\n[cyan]🌐 Опциональные домены:[/cyan]")
+                        ollama_domain = Prompt.ask(
+                            f"Домен Ollama (пример: ollama.{base_domain}) или '-' для пропуска",
+                            default=f"ollama.{base_domain}"
+                        )
+                        if ollama_domain != '-':
+                            is_valid, error = validate_domain(ollama_domain)
+                            if is_valid:
+                                domains_config['ollama_domain'] = ollama_domain
+                            else:
+                                console.print(f"[red]❌ {error}[/red]")
+                                console.print("[yellow]Домен Ollama пропущен[/yellow]")
+                    
+                    break
+                else:
+                    console.print("[yellow]Введите другой базовый домен или '-' для пропуска[/yellow]\n")
+        else:
+            # РУЧНОЙ РЕЖИМ (как было раньше)
+            console.print("\n[yellow]💡[/yellow] Домены (введите '-' для пропуска, система будет работать по IP/localhost):\n")
             
-            # Автоматически формируем поддомены
-            generated_domains = {
-                'n8n_domain': f"n8n.{base_domain}",
-                'langflow_domain': f"langflow.{base_domain}",
-                'supabase_domain': f"supabase.{base_domain}"
-            }
+            while True:
+                n8n_domain = Prompt.ask("Домен N8N (пример: n8n.site.ru) или '-'", default="-")
+                if n8n_domain == '-':
+                    break
+                is_valid, error = validate_domain(n8n_domain)
+                if is_valid:
+                    domains_config['n8n_domain'] = n8n_domain
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
             
+            while True:
+                langflow_domain = Prompt.ask("Домен Langflow (пример: langflow.site.ru) или '-'", default="-")
+                if langflow_domain == '-':
+                    break
+                is_valid, error = validate_domain(langflow_domain)
+                if is_valid:
+                    domains_config['langflow_domain'] = langflow_domain
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
+            
+            while True:
+                supabase_domain = Prompt.ask("Домен Supabase (пример: supabase.site.ru) или '-'", default="-")
+                if supabase_domain == '-':
+                    break
+                is_valid, error = validate_domain(supabase_domain)
+                if is_valid:
+                    domains_config['supabase_domain'] = supabase_domain
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
+            
+            # Опциональные домены
             if ollama_available:
-                generated_domains['ollama_domain'] = f"ollama.{base_domain}"
-            
-            # Показываем сформированные поддомены
-            console.print("\n[green]✓ Сформированные поддомены:[/green]")
-            console.print(f"  N8N: [cyan]{generated_domains['n8n_domain']}[/cyan]")
-            console.print(f"  Langflow: [cyan]{generated_domains['langflow_domain']}[/cyan]")
-            console.print(f"  Supabase: [cyan]{generated_domains['supabase_domain']}[/cyan]")
-            if ollama_available:
-                console.print(f"  Ollama: [cyan]{generated_domains['ollama_domain']}[/cyan]")
-            
-            # Подтверждение
-            if Confirm.ask("\nИспользовать эти поддомены?", default=True):
-                domains_config.update(generated_domains)
-                break
-            else:
-                console.print("[yellow]Введите другой базовый домен или '-' для пропуска[/yellow]\n")
+                console.print("\n[cyan]🌐 Опциональные домены (введите '-' для пропуска):[/cyan]")
+                ollama_domain = Prompt.ask("Домен Ollama (пример: ollama.site.ru) или '-'", default="-")
+                if ollama_domain != '-':
+                    is_valid, error = validate_domain(ollama_domain)
+                    if is_valid:
+                        domains_config['ollama_domain'] = ollama_domain
         
         # SSL
         if any(domains_config.values()):
@@ -239,46 +305,84 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
     elif routing_mode == 'path':
         console.print("\n[bold cyan]📝 КОНФИГУРАЦИЯ СИСТЕМЫ:[/bold cyan]")
         console.print("\n[cyan]🌐 Домены[/cyan]")
-        console.print("[yellow]💡[/yellow] Введите базовый домен, система автоматически сформирует пути")
-        console.print("[yellow]💡[/yellow] Или введите '-' для пропуска (система будет работать по IP/localhost)\n")
+        console.print("[yellow]💡[/yellow] Домены опциональны. Если не указаны, доступ будет по IP адресу сервера\n")
         
-        while True:
-            base_domain = Prompt.ask("Базовый домен (пример: site.ru) или '-'", default="-")
-            if base_domain == '-':
-                break
+        # Выбор режима ввода
+        use_auto = Confirm.ask(
+            "Автоматически сформировать пути из базового домена?",
+            default=True
+        )
+        
+        if use_auto:
+            # АВТОМАТИЧЕСКИЙ РЕЖИМ
+            console.print("\n[yellow]💡[/yellow] Введите базовый домен, система автоматически сформирует пути")
+            console.print("[yellow]💡[/yellow] Или введите '-' для пропуска (система будет работать по IP/localhost)\n")
             
-            # Валидация базового домена
-            is_valid, error = validate_domain(base_domain)
-            if not is_valid:
-                console.print(f"[red]❌ {error}[/red]")
-                continue
+            while True:
+                base_domain = Prompt.ask("Базовый домен (пример: site.ru) или '-'", default="-")
+                if base_domain == '-':
+                    break
+                
+                # Валидация базового домена
+                is_valid, error = validate_domain(base_domain)
+                if not is_valid:
+                    console.print(f"[red]❌ {error}[/red]")
+                    continue
+                
+                # Автоматически формируем пути для основных сервисов
+                generated_paths = {
+                    'base_domain': base_domain,
+                    'n8n_path': '/n8n',
+                    'langflow_path': '/langflow',
+                    'supabase_path': '/supabase'
+                }
+                
+                # Показываем сформированные пути
+                console.print("\n[green]✓ Сформированные пути:[/green]")
+                console.print(f"  Базовый домен: [cyan]{base_domain}[/cyan]")
+                console.print(f"  N8N: [cyan]{base_domain}{generated_paths['n8n_path']}[/cyan]")
+                console.print(f"  Langflow: [cyan]{base_domain}{generated_paths['langflow_path']}[/cyan]")
+                console.print(f"  Supabase: [cyan]{base_domain}{generated_paths['supabase_path']}[/cyan]")
+                
+                # Подтверждение основных путей
+                if Confirm.ask("\nИспользовать эти пути?", default=True):
+                    domains_config.update(generated_paths)
+                    
+                    # Спрашиваем про Ollama отдельно, если доступен
+                    if ollama_available:
+                        console.print("\n[cyan]🌐 Опциональные пути:[/cyan]")
+                        ollama_path = Prompt.ask(
+                            f"Путь для Ollama (пример: /ollama) или '-' для пропуска",
+                            default="/ollama"
+                        )
+                        if ollama_path != '-':
+                            domains_config['ollama_path'] = ollama_path
+                    
+                    break
+                else:
+                    console.print("[yellow]Введите другой базовый домен или '-' для пропуска[/yellow]\n")
+        else:
+            # РУЧНОЙ РЕЖИМ (как было раньше)
+            console.print("\n[yellow]💡[/yellow] Домены (введите '-' для пропуска, система будет работать по IP/localhost):\n")
             
-            # Автоматически формируем пути
-            generated_paths = {
-                'base_domain': base_domain,
-                'n8n_path': '/n8n',
-                'langflow_path': '/langflow',
-                'supabase_path': '/supabase'
-            }
+            while True:
+                base_domain = Prompt.ask("Базовый домен (пример: site.ru) или '-'", default="-")
+                if base_domain == '-':
+                    break
+                is_valid, error = validate_domain(base_domain)
+                if is_valid:
+                    domains_config['base_domain'] = base_domain
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
             
-            if ollama_available:
-                generated_paths['ollama_path'] = '/ollama'
-            
-            # Показываем сформированные пути
-            console.print("\n[green]✓ Сформированные пути:[/green]")
-            console.print(f"  Базовый домен: [cyan]{base_domain}[/cyan]")
-            console.print(f"  N8N: [cyan]{base_domain}{generated_paths['n8n_path']}[/cyan]")
-            console.print(f"  Langflow: [cyan]{base_domain}{generated_paths['langflow_path']}[/cyan]")
-            console.print(f"  Supabase: [cyan]{base_domain}{generated_paths['supabase_path']}[/cyan]")
-            if ollama_available:
-                console.print(f"  Ollama: [cyan]{base_domain}{generated_paths['ollama_path']}[/cyan]")
-            
-            # Подтверждение
-            if Confirm.ask("\nИспользовать эти пути?", default=True):
-                domains_config.update(generated_paths)
-                break
-            else:
-                console.print("[yellow]Введите другой базовый домен или '-' для пропуска[/yellow]\n")
+            if base_domain != '-':
+                domains_config['n8n_path'] = Prompt.ask("Путь для N8N", default="/n8n")
+                domains_config['langflow_path'] = Prompt.ask("Путь для Langflow", default="/langflow")
+                domains_config['supabase_path'] = Prompt.ask("Путь для Supabase", default="/supabase")
+                
+                if ollama_available:
+                    domains_config['ollama_path'] = Prompt.ask("Путь для Ollama", default="/ollama")
         
         # SSL
         if any(domains_config.values()):
