@@ -3,9 +3,10 @@
 """
 import subprocess
 import sys
+import re
 from typing import Optional, Dict, List
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TaskID
 
 console = Console()
 
@@ -140,31 +141,83 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
                 universal_newlines=True
             )
             
-            # Показываем весь вывод pull с прогрессом
+            # Используем Progress для динамического отображения
+            current_image = None
+            current_status = "Ожидание..."
             pull_output = []
-            try:
-                for line in pull_process.stdout:
-                    line = line.rstrip()
-                    if line:
-                        pull_output.append(line)
-                        # Показываем все строки с прогрессом загрузки
-                        if any(keyword in line.lower() for keyword in ['pulling', 'downloading', 'extracting', 'pull complete', 'already exists', 'error', 'failed', 'waiting', 'verifying']):
-                            console.print(f"[dim]{line}[/dim]")
-                        # Показываем прогресс слоев (проценты, размеры)
-                        elif '%' in line or 'mb' in line.lower() or 'kb' in line.lower() or 'gb' in line.lower():
-                            console.print(f"[dim]{line}[/dim]")
-                        # Показываем статусы слоев
-                        elif 'layer' in line.lower() or 'digest:' in line.lower() or 'status:' in line.lower():
-                            console.print(f"[dim]{line}[/dim]")
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+                console=console,
+                transient=False
+            ) as progress:
+                task = progress.add_task(
+                    f"[cyan]Загрузка образов...[/cyan]",
+                    total=100
+                )
                 
-                pull_return_code = pull_process.wait(timeout=600)
-            except subprocess.TimeoutExpired:
-                pull_process.kill()
-                console.print("[red]❌ Таймаут при загрузке образов (более 10 минут)[/red]")
-                return False
+                try:
+                    for line in pull_process.stdout:
+                        line = line.rstrip()
+                        if not line:
+                            continue
+                        
+                        pull_output.append(line)
+                        line_lower = line.lower()
+                        
+                        # Определяем текущий образ
+                        if 'pulling' in line_lower and 'image' in line_lower:
+                            # Извлекаем имя образа
+                            match = re.search(r'pulling.*?image[:\s]+([^\s]+)', line_lower)
+                            if match:
+                                current_image = match.group(1).split('/')[-1]
+                                current_status = f"Загрузка {current_image}..."
+                                progress.update(task, description=f"[cyan]{current_status}[/cyan]")
+                        
+                        # Парсим процент загрузки
+                        percent_match = re.search(r'(\d+(?:\.\d+)?)%', line)
+                        if percent_match:
+                            try:
+                                percent = float(percent_match.group(1))
+                                progress.update(task, completed=percent)
+                            except ValueError:
+                                pass
+                        
+                        # Определяем статус
+                        if 'pull complete' in line_lower or 'already exists' in line_lower:
+                            if current_image:
+                                current_status = f"✓ {current_image} загружен"
+                                progress.update(task, description=f"[green]{current_status}[/green]", completed=100)
+                                current_image = None
+                        elif 'downloading' in line_lower:
+                            current_status = f"Скачивание {current_image or 'образа'}..."
+                            progress.update(task, description=f"[cyan]{current_status}[/cyan]")
+                        elif 'extracting' in line_lower:
+                            current_status = f"Распаковка {current_image or 'образа'}..."
+                            progress.update(task, description=f"[cyan]{current_status}[/cyan]")
+                        elif 'verifying' in line_lower:
+                            current_status = f"Проверка {current_image or 'образа'}..."
+                            progress.update(task, description=f"[yellow]{current_status}[/yellow]")
+                        elif 'error' in line_lower or 'failed' in line_lower:
+                            current_status = f"❌ Ошибка: {line[:50]}"
+                            progress.update(task, description=f"[red]{current_status}[/red]")
+                    
+                    pull_return_code = pull_process.wait(timeout=600)
+                    
+                    if pull_return_code == 0:
+                        progress.update(task, description="[green]✓ Все образы загружены[/green]", completed=100)
+                except subprocess.TimeoutExpired:
+                    pull_process.kill()
+                    progress.update(task, description="[red]❌ Таймаут при загрузке[/red]")
+                    console.print("\n[red]❌ Таймаут при загрузке образов (более 10 минут)[/red]")
+                    return False
             
             if pull_return_code != 0:
-                console.print(f"[red]❌ Ошибка при загрузке образов (код: {pull_return_code})[/red]")
+                console.print(f"\n[red]❌ Ошибка при загрузке образов (код: {pull_return_code})[/red]")
                 if pull_output:
                     console.print(f"[yellow]Последние строки вывода:[/yellow]")
                     for line in pull_output[-10:]:
@@ -181,7 +234,7 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
                 up_cmd.extend(['-f', file])
             up_cmd.extend(['up', '-d'])
             
-            # Запускаем up с выводом
+            # Запускаем up с динамическим прогрессом
             up_process = subprocess.Popen(
                 up_cmd,
                 stdout=subprocess.PIPE,
@@ -192,23 +245,56 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
             )
             
             up_output = []
-            try:
-                for line in up_process.stdout:
-                    line = line.rstrip()
-                    if line:
-                        up_output.append(line)
-                        # Показываем важные строки запуска
-                        if any(keyword in line.lower() for keyword in ['creating', 'starting', 'started', 'error', 'failed', 'warning', 'container']):
-                            console.print(f"[dim]{line}[/dim]")
+            current_container = None
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=False
+            ) as progress:
+                task = progress.add_task(
+                    "[cyan]Запуск контейнеров...[/cyan]",
+                    total=None
+                )
                 
-                up_return_code = up_process.wait(timeout=120)
-            except subprocess.TimeoutExpired:
-                up_process.kill()
-                console.print("[red]❌ Таймаут при запуске контейнеров[/red]")
-                return False
+                try:
+                    for line in up_process.stdout:
+                        line = line.rstrip()
+                        if not line:
+                            continue
+                        
+                        up_output.append(line)
+                        line_lower = line.lower()
+                        
+                        # Определяем текущий контейнер
+                        if 'creating' in line_lower:
+                            match = re.search(r'creating[^\s]*\s+([^\s]+)', line_lower)
+                            if match:
+                                current_container = match.group(1)
+                                progress.update(task, description=f"[cyan]Создание {current_container}...[/cyan]")
+                        elif 'starting' in line_lower:
+                            if current_container:
+                                progress.update(task, description=f"[cyan]Запуск {current_container}...[/cyan]")
+                        elif 'started' in line_lower:
+                            if current_container:
+                                progress.update(task, description=f"[green]✓ {current_container} запущен[/green]")
+                                current_container = None
+                        elif 'error' in line_lower or 'failed' in line_lower:
+                            progress.update(task, description=f"[red]❌ Ошибка: {line[:50]}[/red]")
+                    
+                    up_return_code = up_process.wait(timeout=120)
+                    
+                    if up_return_code == 0:
+                        progress.update(task, description="[green]✓ Все контейнеры запущены[/green]")
+                except subprocess.TimeoutExpired:
+                    up_process.kill()
+                    progress.update(task, description="[red]❌ Таймаут при запуске[/red]")
+                    console.print("\n[red]❌ Таймаут при запуске контейнеров[/red]")
+                    return False
             
             if up_return_code != 0:
-                console.print(f"[red]❌ Ошибка при запуске контейнеров (код: {up_return_code})[/red]")
+                console.print(f"\n[red]❌ Ошибка при запуске контейнеров (код: {up_return_code})[/red]")
                 if up_output:
                     console.print(f"[yellow]Последние строки вывода:[/yellow]")
                     for line in up_output[-10:]:
