@@ -28,7 +28,6 @@ from installer.docker_manager import (
 )
 from installer.config_generator import generate_env_file, generate_docker_compose
 from installer.nginx_config import generate_nginx_configs
-from installer.supabase_keys import generate_supabase_keys_proper
 from installer.utils import generate_secret_key, generate_password, ensure_dir
 
 console = Console()
@@ -335,19 +334,12 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
         ))
     
     # Порты
-    services_config['n8n_port'] = IntPrompt.ask("Порт для N8N", default=5678)
-    services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow", default=7860)
-    services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase", default=8000)
+    console.print("\n[cyan]🔌 Настройка портов:[/cyan]")
+    console.print("[yellow]💡[/yellow] Нажмите Enter для продолжения с портом по умолчанию или введите свой порт\n")
     
-    # Langflow API ключ
-    langflow_api_key = Prompt.ask(
-        "Langflow API ключ (или оставьте пустым для автогенерации)",
-        default=""
-    )
-    if not langflow_api_key:
-        langflow_api_key = generate_secret_key(32)
-        console.print(f"[green]Сгенерирован API ключ: {langflow_api_key}[/green]")
-    services_config['langflow_api_key'] = langflow_api_key
+    services_config['n8n_port'] = IntPrompt.ask("Порт для N8N (5678)", default=5678)
+    services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow (7860)", default=7860)
+    services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase (8000)", default=8000)
     
     # Ollama
     if recommended_config.get('ollama_recommended', False):
@@ -364,7 +356,7 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     services_config['ollama_enabled'] = ollama_enabled
     
     if ollama_enabled:
-        services_config['ollama_port'] = IntPrompt.ask("Порт для Ollama", default=11434)
+        services_config['ollama_port'] = IntPrompt.ask("Порт для Ollama (11434)", default=11434)
         services_config['ollama_memory_limit'] = f"{recommended_config['memory_limits']['ollama']:.1f}g"
         services_config['ollama_cpu_limit'] = recommended_config['cpu_limits']['ollama']
         services_config['ollama_image'] = recommended_config['ollama_image']
@@ -372,9 +364,41 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     return services_config
 
 
-def configure_supabase_keys() -> dict:
-    """Настройка ключей Supabase"""
-    console.print("\n[yellow]🔑 Ключи Supabase:[/yellow]")
+def configure_supabase() -> dict:
+    """Настройка Supabase: пароль, ключи"""
+    console.print("\n[yellow]🗄️ Настройка Supabase:[/yellow]")
+    
+    # Пароль для Supabase
+    console.print("\n[cyan]Пароль для Supabase:[/cyan]")
+    console.print("[yellow]💡[/yellow] Пароль для подключения к базе данных PostgreSQL\n")
+    
+    generate_password_auto = Confirm.ask(
+        "Сгенерировать пароль автоматически?",
+        default=True
+    )
+    
+    if generate_password_auto:
+        postgres_password = generate_password()
+        console.print(f"[green]✓ Пароль сгенерирован: {postgres_password}[/green]")
+        console.print("[yellow]⚠ Сохраните этот пароль! Он понадобится для подключения к базе данных[/yellow]")
+    else:
+        while True:
+            postgres_password = Prompt.ask(
+                "Введите пароль для Supabase (минимум 8 символов)",
+                password=True
+            )
+            if len(postgres_password) >= 8:
+                break
+            else:
+                console.print("[red]❌ Пароль должен быть минимум 8 символов[/red]")
+    
+    # Логин для админки (фиксированный)
+    supabase_admin_login = "admin"
+    console.print(f"\n[cyan]Логин для админки Supabase: {supabase_admin_login}[/cyan]")
+    console.print("[yellow]💡[/yellow] Логин 'admin' будет использоваться для входа в админ-панель Supabase\n")
+    
+    # Ключи Supabase
+    console.print("[yellow]🔑 Ключи Supabase:[/yellow]")
     console.print("[yellow]💡[/yellow] Генерация: https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys")
     console.print("[cyan]Ссылка открыта в браузере или скопируйте её[/cyan]\n")
     
@@ -385,39 +409,37 @@ def configure_supabase_keys() -> dict:
     except Exception:
         pass
     
-    # Генерируем ключи автоматически
-    console.print("[green]✓ Автоматическая генерация ключей Supabase...[/green]")
-    keys = generate_supabase_keys_proper()
+    # Запрашиваем ключи у пользователя
+    console.print("[yellow]⚠ Введите ключи Supabase из документации:[/yellow]\n")
     
-    console.print(f"\n[cyan]Сгенерированные ключи:[/cyan]")
-    console.print(f"  JWT_SECRET: {keys['jwt_secret'][:20]}...")
-    console.print(f"  ANON_KEY: {keys['anon_key'][:20]}...")
-    console.print(f"  SERVICE_ROLE_KEY: {keys['service_role_key'][:20]}...")
+    while True:
+        jwt_secret = Prompt.ask("JWT_SECRET (минимум 32 символов)", default="")
+        if len(jwt_secret) >= 32:
+            break
+        else:
+            console.print("[red]❌ JWT_SECRET должен быть минимум 32 символа[/red]")
     
-    # Позволяем пользователю ввести свои ключи если хочет
-    use_custom = Confirm.ask("\nИспользовать свои ключи Supabase?", default=False)
-    
-    if use_custom:
-        while True:
-            jwt_secret = Prompt.ask("JWT_SECRET (минимум 32 символов)", default="")
-            if len(jwt_secret) >= 32:
-                keys['jwt_secret'] = jwt_secret
-                # Перегенерируем остальные ключи на основе нового JWT_SECRET
-                keys = generate_supabase_keys_proper()
-                keys['jwt_secret'] = jwt_secret
-                break
-            else:
-                console.print("[red]❌ JWT_SECRET должен быть минимум 32 символа[/red]")
-        
-        anon_key = Prompt.ask("ANON_KEY (или оставьте пустым для автогенерации)", default="")
+    while True:
+        anon_key = Prompt.ask("ANON_KEY", default="")
         if anon_key:
-            keys['anon_key'] = anon_key
-        
-        service_key = Prompt.ask("SERVICE_ROLE_KEY (или оставьте пустым для автогенерации)", default="")
-        if service_key:
-            keys['service_role_key'] = service_key
+            break
+        else:
+            console.print("[red]❌ ANON_KEY обязателен для работы Supabase[/red]")
     
-    return keys
+    while True:
+        service_role_key = Prompt.ask("SERVICE_ROLE_KEY", default="")
+        if service_role_key:
+            break
+        else:
+            console.print("[red]❌ SERVICE_ROLE_KEY обязателен для работы Supabase[/red]")
+    
+    return {
+        'postgres_password': postgres_password,
+        'supabase_admin_login': supabase_admin_login,
+        'jwt_secret': jwt_secret,
+        'anon_key': anon_key,
+        'service_role_key': service_role_key
+    }
 
 
 def main():
@@ -490,9 +512,9 @@ def main():
         # 8. Настройка сервисов
         services_config = configure_services(recommended_config, hardware)
         
-        # 9. Настройка ключей Supabase
-        supabase_keys = configure_supabase_keys()
-        services_config.update(supabase_keys)
+        # 9. Настройка Supabase (пароль, ключи)
+        supabase_config = configure_supabase()
+        services_config.update(supabase_config)
         
         # 10. Объединяем конфигурацию
         full_config = {
@@ -529,8 +551,12 @@ def main():
         console.print("\n[cyan]🚀 Готово к запуску![/cyan]")
         if Confirm.ask("Запустить сервисы сейчас?", default=True):
             console.print("\n[cyan]Запуск сервисов...[/cyan]")
-            if docker_compose_up():
-                console.print("[green]✓ Сервисы запущены![/green]")
+            console.print("[yellow]💡 Это может занять несколько минут при первой загрузке образов[/yellow]\n")
+            
+            # Указываем путь к docker-compose.yml
+            compose_file = Path.cwd() / "docker-compose.yml"
+            if docker_compose_up(file=str(compose_file)):
+                console.print("\n[green]✓ Сервисы запущены![/green]")
                 
                 # Показываем информацию для доступа
                 console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
@@ -546,9 +572,16 @@ def main():
                     console.print(f"  N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
                     console.print(f"  Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
                     console.print(f"  Supabase: http://localhost:{full_config.get('supabase_port', 8000)}")
+                
+                console.print("\n[yellow]💡 Если сервисы не запустились, проверьте логи:[/yellow]")
+                console.print("[dim]docker-compose logs[/dim]")
             else:
-                console.print("[red]❌ Ошибка при запуске сервисов[/red]")
-                console.print("   Проверьте логи: docker-compose logs")
+                console.print("\n[red]❌ Ошибка при запуске сервисов[/red]")
+                console.print("\n[yellow]💡 Диагностика проблемы:[/yellow]")
+                console.print("  1. Проверьте логи: [dim]docker-compose logs[/dim]")
+                console.print("  2. Проверьте статус: [dim]docker-compose ps[/dim]")
+                console.print("  3. Попробуйте запустить вручную: [dim]docker-compose up -d[/dim]")
+                console.print("  4. Проверьте .env файл на наличие всех переменных")
         
         console.print("\n[green]✓ Установка завершена![/green]")
         

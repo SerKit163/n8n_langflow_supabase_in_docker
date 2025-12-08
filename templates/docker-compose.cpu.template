@@ -35,7 +35,7 @@ services:
     ports:
       - "${LANGFLOW_PORT}:7860"
     environment:
-      - LANGFLOW_API_KEY=${LANGFLOW_API_KEY}
+      - LANGFLOW_API_KEY=${LANGFLOW_API_KEY:-}
       - LANGFLOW_HOST=0.0.0.0
       - LANGFLOW_PORT=7860
     deploy:

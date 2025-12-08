@@ -125,30 +125,102 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
         cmd.append('-d')
     
     try:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("Запуск сервисов...", total=None)
+        console.print("[cyan]Запуск Docker Compose...[/cyan]")
+        console.print(f"[dim]Команда: {' '.join(cmd)}[/dim]\n")
+        
+        # Запускаем команду
+        # Для detach режима используем capture_output для быстрого завершения
+        # Для не-detach показываем вывод напрямую
+        if detach:
+            # В detach режиме команда должна завершиться быстро
+            # Показываем прогресс через спиннер, но не блокируем вывод
+            console.print("[dim]Загрузка образов и запуск контейнеров...[/dim]")
+            console.print("[dim]Это может занять несколько минут при первой установке[/dim]\n")
+            
+            # Запускаем команду с выводом в реальном времени
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            # Показываем важные строки вывода
+            important_keywords = ['pulling', 'creating', 'starting', 'started', 'error', 'failed', 'warning']
+            output_buffer = []
+            
+            try:
+                for line in process.stdout:
+                    line = line.strip()
+                    if line:
+                        output_buffer.append(line)
+                        # Показываем только важные строки
+                        if any(keyword in line.lower() for keyword in important_keywords):
+                            console.print(f"[dim]{line}[/dim]")
+                
+                # Ждем завершения процесса
+                return_code = process.wait(timeout=600)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                console.print("[red]❌ Таймаут при запуске сервисов (более 10 минут)[/red]")
+                return False
+            
+            if return_code != 0:
+                console.print(f"[red]❌ Ошибка при запуске сервисов (код: {return_code})[/red]")
+                # Показываем последние строки вывода
+                if output_buffer:
+                    console.print(f"[yellow]Последние строки вывода:[/yellow]")
+                    for line in output_buffer[-10:]:
+                        console.print(f"[dim]{line}[/dim]")
+                console.print(f"\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
+                console.print(f"[dim]{' '.join(cmd)}[/dim]")
+                return False
+            
+            console.print("[green]✓ Сервисы запущены[/green]")
+            
+            # Даем время контейнерам запуститься
+            import time
+            time.sleep(2)
+            
+            # Проверяем статус
+            status_cmd = get_docker_compose_command()
+            if file:
+                status_cmd.extend(['-f', file])
+            status_cmd.extend(['ps'])
+            
+            try:
+                status_result = subprocess.run(
+                    status_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                
+                if status_result.returncode == 0 and status_result.stdout.strip():
+                    console.print("\n[cyan]Статус контейнеров:[/cyan]")
+                    console.print(status_result.stdout)
+            except Exception:
+                pass  # Игнорируем ошибки проверки статуса
+        else:
+            # Для не-detach режима показываем вывод напрямую
             result = subprocess.run(
                 cmd,
-                capture_output=True,
-                text=True,
-                timeout=300
+                timeout=600
             )
-            progress.update(task, completed=True)
-        
-        if result.returncode != 0:
-            console.print(f"[red]Ошибка при запуске:[/red]\n{result.stderr}")
-            return False
+            return result.returncode == 0
         
         return True
     except subprocess.TimeoutExpired:
-        console.print("[red]Таймаут при запуске сервисов[/red]")
+        console.print("[red]❌ Таймаут при запуске сервисов (более 10 минут)[/red]")
+        console.print("[yellow]💡 Возможно, образы загружаются слишком долго[/yellow]")
+        console.print("[yellow]💡 Попробуйте запустить вручную: docker-compose up -d[/yellow]")
         return False
     except Exception as e:
-        console.print(f"[red]Ошибка: {e}[/red]")
+        console.print(f"[red]❌ Ошибка: {e}[/red]")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
         return False
 
 

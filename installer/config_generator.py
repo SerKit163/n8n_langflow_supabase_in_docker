@@ -47,11 +47,13 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'LANGFLOW_CPU_LIMIT': str(config.get('langflow_cpu_limit', 0.5)),
         'SUPABASE_CPU_LIMIT': str(config.get('supabase_cpu_limit', 0.3)),
         'OLLAMA_CPU_LIMIT': str(config.get('ollama_cpu_limit', 1.0)),
-        'LANGFLOW_API_KEY': config.get('langflow_api_key', generate_secret_key(32)),
+        'LANGFLOW_API_KEY': config.get('langflow_api_key', ''),
+        # Примечание: LANGFLOW_API_KEY настраивается в самом Langflow после запуска
         'POSTGRES_PASSWORD': config.get('postgres_password', generate_password()),
-        'JWT_SECRET': config.get('jwt_secret', generate_secret_key(64)),
-        'ANON_KEY': config.get('anon_key', generate_secret_key(64)),
-        'SERVICE_ROLE_KEY': config.get('service_role_key', generate_secret_key(64)),
+        'SUPABASE_ADMIN_LOGIN': config.get('supabase_admin_login', 'admin'),
+        'JWT_SECRET': config.get('jwt_secret', ''),
+        'ANON_KEY': config.get('anon_key', ''),
+        'SERVICE_ROLE_KEY': config.get('service_role_key', ''),
         'OLLAMA_ENABLED': 'true' if config.get('ollama_enabled', False) else 'false',
     }
     
@@ -117,6 +119,7 @@ SUPABASE_PORT={SUPABASE_PORT}
 SUPABASE_MEMORY_LIMIT={SUPABASE_MEMORY_LIMIT}
 SUPABASE_CPU_LIMIT={SUPABASE_CPU_LIMIT}
 POSTGRES_PASSWORD={POSTGRES_PASSWORD}
+SUPABASE_ADMIN_LOGIN={SUPABASE_ADMIN_LOGIN}
 JWT_SECRET={JWT_SECRET}
 ANON_KEY={ANON_KEY}
 SERVICE_ROLE_KEY={SERVICE_ROLE_KEY}
@@ -168,16 +171,18 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
     # Шаблоны уже используют ${VAR} синтаксис, поэтому просто записываем как есть
     # Но нужно добавить env_file если его нет
     if 'env_file:' not in content and 'x-env-file:' not in content:
-        # Добавляем env_file в начало файла после version
+        import re
+        # Добавляем x-env-file в начало файла после version
         content = content.replace(
             "version: '3.8'\n",
             "version: '3.8'\n\nx-env-file: &env-file\n  env_file:\n    - .env\n\n"
         )
         # Добавляем ссылку на env_file в каждый сервис
-        content = content.replace(
-            "    container_name:",
-            "    <<: *env-file\n    container_name:"
-        )
+        # Ищем начало каждого сервиса (строки "  имя_сервиса:") и добавляем после них env_file
+        # Заменяем паттерн: "  имя:\n    image:" на "  имя:\n    <<: *env-file\n    image:"
+        pattern = r'(^  [a-z-]+:\n)(    image:)'
+        replacement = r'\1    <<: *env-file\n\2'
+        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
     
     write_file(output_path, content)
 
