@@ -1,0 +1,567 @@
+#!/usr/bin/env python3
+"""
+Интерактивный установщик n8n + Langflow + Supabase stack
+"""
+import sys
+import subprocess
+from pathlib import Path
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.prompt import Prompt, Confirm, IntPrompt
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.markdown import Markdown
+
+# Добавляем путь к модулям
+sys.path.insert(0, str(Path(__file__).parent))
+
+from installer.hardware_detector import detect_hardware
+from installer.config_adaptor import adapt_config_for_hardware, get_resource_summary
+from installer.resource_checker import display_resource_check
+from installer.validator import (
+    validate_domain, validate_port, validate_email, validate_path,
+    validate_memory, validate_cpu, validate_api_key
+)
+from installer.docker_manager import (
+    check_docker, check_docker_compose, is_docker_running,
+    get_docker_version, get_docker_compose_version, docker_compose_up
+)
+from installer.config_generator import generate_env_file, generate_docker_compose
+from installer.nginx_config import generate_nginx_configs
+from installer.supabase_keys import generate_supabase_keys_proper
+from installer.utils import generate_secret_key, generate_password, ensure_dir
+
+console = Console()
+
+
+def install_dependencies():
+    """Автоматическая установка Python зависимостей"""
+    requirements_file = Path(__file__).parent / "requirements.txt"
+    
+    if not requirements_file.exists():
+        console.print("[yellow]⚠ requirements.txt не найден[/yellow]")
+        return False
+    
+    console.print("\n[cyan]📦 Установка Python зависимостей...[/cyan]")
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode == 0:
+            console.print("[green]✓ Зависимости установлены[/green]")
+            return True
+        else:
+            console.print(f"[yellow]⚠ Предупреждение при установке зависимостей:[/yellow]")
+            console.print(result.stderr)
+            return False
+    except subprocess.TimeoutExpired:
+        console.print("[yellow]⚠ Таймаут при установке зависимостей[/yellow]")
+        return False
+    except Exception as e:
+        console.print(f"[yellow]⚠ Ошибка при установке зависимостей: {e}[/yellow]")
+        return False
+
+
+def show_welcome():
+    """Показывает приветственное сообщение"""
+    welcome_text = """
+🚀 Установщик n8n + Langflow + Supabase Stack
+
+Этот скрипт поможет вам установить и настроить:
+  • n8n - автоматизация рабочих процессов
+  • Langflow - создание AI агентов
+  • Supabase - база данных и бэкенд
+  • Ollama - локальные LLM модели (опционально)
+
+Следуйте инструкциям для настройки вашей системы.
+"""
+    console.print(Panel(welcome_text, title="[bold cyan]Добро пожаловать![/bold cyan]", border_style="cyan"))
+
+
+def check_system_requirements():
+    """Проверяет системные требования"""
+    console.print("\n[cyan]🔍 Проверка системных требований...[/cyan]")
+    
+    # Проверка Docker
+    if not check_docker():
+        console.print("[red]❌ Docker не установлен![/red]")
+        console.print("   Установите Docker: https://docs.docker.com/get-docker/")
+        return False
+    
+    docker_version = get_docker_version()
+    console.print(f"[green]✓ Docker установлен[/green] {docker_version}")
+    
+    # Проверка Docker Compose
+    if not check_docker_compose():
+        console.print("[red]❌ Docker Compose не установлен![/red]")
+        console.print("   Установите Docker Compose: https://docs.docker.com/compose/install/")
+        return False
+    
+    compose_version = get_docker_compose_version()
+    console.print(f"[green]✓ Docker Compose установлен[/green] {compose_version}")
+    
+    # Проверка что Docker запущен
+    if not is_docker_running():
+        console.print("[red]❌ Docker daemon не запущен![/red]")
+        console.print("   Запустите Docker и попробуйте снова")
+        return False
+    
+    console.print("[green]✓ Docker daemon запущен[/green]")
+    
+    return True
+
+
+def show_hardware_info(hardware):
+    """Показывает информацию о железе"""
+    table = Table(title="📊 Информация о системе")
+    table.add_column("Компонент", style="cyan")
+    table.add_column("Значение", style="green")
+    
+    # CPU
+    cpu_info = f"{hardware['cpu']['cores']} ядер"
+    if hardware['cpu']['threads'] > hardware['cpu']['cores']:
+        cpu_info += f" ({hardware['cpu']['threads']} потоков)"
+    table.add_row("CPU", cpu_info)
+    
+    # RAM
+    ram_info = f"{hardware['ram']['total_gb']:.1f} GB"
+    ram_info += f" (доступно: {hardware['ram']['available_gb']:.1f} GB)"
+    table.add_row("RAM", ram_info)
+    
+    # GPU
+    if hardware['gpu']['available']:
+        gpu_info = f"{hardware['gpu']['vendor']} {hardware['gpu']['model']}"
+        if hardware['gpu']['memory_gb'] > 0:
+            gpu_info += f" ({hardware['gpu']['memory_gb']:.1f} GB)"
+        if hardware['gpu']['cuda_available']:
+            gpu_info += " [green]✓ CUDA[/green]"
+    else:
+        gpu_info = "[yellow]Не обнаружена[/yellow]"
+    table.add_row("GPU", gpu_info)
+    
+    # Диск
+    disk_info = f"{hardware['disk']['free_gb']:.1f} GB свободно"
+    table.add_row("Диск", disk_info)
+    
+    # Тип системы
+    system_type = "🖥️ Локальный ПК" if hardware['system_type'] == 'local' else "☁️ VPS"
+    table.add_row("Тип системы", system_type)
+    
+    console.print(table)
+
+
+def select_routing_mode() -> str:
+    """Выбор режима маршрутизации"""
+    console.print("\n[cyan]🌐 Выбор режима маршрутизации[/cyan]")
+    
+    options = {
+        '1': 'subdomain',
+        '2': 'path',
+        '3': 'none'
+    }
+    
+    console.print("""
+  1) Поддомены (n8n.yourdomain.com, langflow.yourdomain.com)
+  2) Пути (yourdomain.com/n8n, yourdomain.com/langflow)
+  3) Без доменов (только порты, для разработки)
+""")
+    
+    choice = Prompt.ask("Ваш выбор", choices=['1', '2', '3'], default='3')
+    return options[choice]
+
+
+def configure_domains(routing_mode: str) -> dict:
+    """Настройка доменов"""
+    domains_config = {}
+    
+    if routing_mode == 'subdomain':
+        console.print("\n[bold cyan]📝 КОНФИГУРАЦИЯ СИСТЕМЫ:[/bold cyan]")
+        console.print("\n[cyan]🌐 Домены[/cyan]")
+        console.print("[yellow]💡[/yellow] Домены (введите '-' для пропуска, система будет работать по IP/localhost):")
+        console.print("[yellow]💡[/yellow] Домены опциональны. Если не указаны, доступ будет по IP адресу сервера\n")
+        
+        while True:
+            n8n_domain = Prompt.ask("Домен N8N (пример: n8n.site.ru) или '-'", default="-")
+            if n8n_domain == '-':
+                break
+            is_valid, error = validate_domain(n8n_domain)
+            if is_valid:
+                domains_config['n8n_domain'] = n8n_domain
+                break
+            else:
+                console.print(f"[red]❌ {error}[/red]")
+        
+        while True:
+            langflow_domain = Prompt.ask("Домен Langflow (пример: langflow.site.ru) или '-'", default="-")
+            if langflow_domain == '-':
+                break
+            is_valid, error = validate_domain(langflow_domain)
+            if is_valid:
+                domains_config['langflow_domain'] = langflow_domain
+                break
+            else:
+                console.print(f"[red]❌ {error}[/red]")
+        
+        while True:
+            supabase_domain = Prompt.ask("Домен Supabase (пример: supabase.site.ru) или '-'", default="-")
+            if supabase_domain == '-':
+                break
+            is_valid, error = validate_domain(supabase_domain)
+            if is_valid:
+                domains_config['supabase_domain'] = supabase_domain
+                break
+            else:
+                console.print(f"[red]❌ {error}[/red]")
+        
+        # Опциональные домены
+        console.print("\n[cyan]🌐 Опциональные домены (введите '-' для пропуска):[/cyan]")
+        ollama_domain = Prompt.ask("Домен Ollama (пример: ollama.site.ru) или '-'", default="-")
+        if ollama_domain != '-':
+            is_valid, error = validate_domain(ollama_domain)
+            if is_valid:
+                domains_config['ollama_domain'] = ollama_domain
+        
+        # SSL
+        if any(domains_config.values()):
+            console.print("\n[yellow]🔒 Email для SSL сертификатов:[/yellow]")
+            console.print("[yellow]⚠ ВАЖНО: Используйте настоящий email адрес![/yellow]")
+            console.print("[yellow]⚠ Let's Encrypt не принимает фейковые email (например, test@test.test)[/yellow]\n")
+            
+            while True:
+                email = Prompt.ask("Email для Let's Encrypt")
+                is_valid, error = validate_email(email)
+                if is_valid:
+                    domains_config['letsencrypt_email'] = email
+                    domains_config['ssl_enabled'] = True
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
+    
+    elif routing_mode == 'path':
+        console.print("\n[bold cyan]📝 КОНФИГУРАЦИЯ СИСТЕМЫ:[/bold cyan]")
+        console.print("\n[cyan]🌐 Домены[/cyan]")
+        console.print("[yellow]💡[/yellow] Домены (введите '-' для пропуска, система будет работать по IP/localhost):")
+        console.print("[yellow]💡[/yellow] Домены опциональны. Если не указаны, доступ будет по IP адресу сервера\n")
+        
+        while True:
+            base_domain = Prompt.ask("Базовый домен (пример: site.ru) или '-'", default="-")
+            if base_domain == '-':
+                break
+            is_valid, error = validate_domain(base_domain)
+            if is_valid:
+                domains_config['base_domain'] = base_domain
+                break
+            else:
+                console.print(f"[red]❌ {error}[/red]")
+        
+        if base_domain != '-':
+            domains_config['n8n_path'] = Prompt.ask("Путь для N8N", default="/n8n")
+            domains_config['langflow_path'] = Prompt.ask("Путь для Langflow", default="/langflow")
+            domains_config['supabase_path'] = Prompt.ask("Путь для Supabase", default="/supabase")
+            
+            # SSL
+            console.print("\n[yellow]🔒 Email для SSL сертификатов:[/yellow]")
+            console.print("[yellow]⚠ ВАЖНО: Используйте настоящий email адрес![/yellow]\n")
+            
+            while True:
+                email = Prompt.ask("Email для Let's Encrypt")
+                is_valid, error = validate_email(email)
+                if is_valid:
+                    domains_config['letsencrypt_email'] = email
+                    domains_config['ssl_enabled'] = True
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
+    
+    return domains_config
+
+
+def configure_services(recommended_config: dict, hardware: dict) -> dict:
+    """Настройка сервисов"""
+    console.print("\n[cyan]⚙️ Настройка сервисов[/cyan]")
+    
+    services_config = {}
+    
+    # Использовать рекомендуемые настройки?
+    use_recommended = Confirm.ask(
+        "Использовать рекомендуемые настройки на основе вашего железа?",
+        default=True
+    )
+    
+    if use_recommended:
+        services_config = {
+            'n8n_memory_limit': f"{recommended_config['memory_limits']['n8n']:.1f}g",
+            'n8n_cpu_limit': recommended_config['cpu_limits']['n8n'],
+            'langflow_memory_limit': f"{recommended_config['memory_limits']['langflow']:.1f}g",
+            'langflow_cpu_limit': recommended_config['cpu_limits']['langflow'],
+            'supabase_memory_limit': f"{recommended_config['memory_limits']['supabase']:.1f}g",
+            'supabase_cpu_limit': recommended_config['cpu_limits']['supabase'],
+        }
+    else:
+        # Ручная настройка
+        console.print("\n[yellow]N8N:[/yellow]")
+        services_config['n8n_memory_limit'] = Prompt.ask(
+            "Лимит памяти (например, 2g)",
+            default=f"{recommended_config['memory_limits']['n8n']:.1f}g"
+        )
+        services_config['n8n_cpu_limit'] = float(Prompt.ask(
+            "Лимит CPU",
+            default=str(recommended_config['cpu_limits']['n8n'])
+        ))
+        
+        console.print("\n[yellow]Langflow:[/yellow]")
+        services_config['langflow_memory_limit'] = Prompt.ask(
+            "Лимит памяти",
+            default=f"{recommended_config['memory_limits']['langflow']:.1f}g"
+        )
+        services_config['langflow_cpu_limit'] = float(Prompt.ask(
+            "Лимит CPU",
+            default=str(recommended_config['cpu_limits']['langflow'])
+        ))
+        
+        console.print("\n[yellow]Supabase:[/yellow]")
+        services_config['supabase_memory_limit'] = Prompt.ask(
+            "Лимит памяти",
+            default=f"{recommended_config['memory_limits']['supabase']:.1f}g"
+        )
+        services_config['supabase_cpu_limit'] = float(Prompt.ask(
+            "Лимит CPU",
+            default=str(recommended_config['cpu_limits']['supabase'])
+        ))
+    
+    # Порты
+    services_config['n8n_port'] = IntPrompt.ask("Порт для N8N", default=5678)
+    services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow", default=7860)
+    services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase", default=8000)
+    
+    # Langflow API ключ
+    langflow_api_key = Prompt.ask(
+        "Langflow API ключ (или оставьте пустым для автогенерации)",
+        default=""
+    )
+    if not langflow_api_key:
+        langflow_api_key = generate_secret_key(32)
+        console.print(f"[green]Сгенерирован API ключ: {langflow_api_key}[/green]")
+    services_config['langflow_api_key'] = langflow_api_key
+    
+    # Ollama
+    if recommended_config.get('ollama_recommended', False):
+        ollama_enabled = Confirm.ask(
+            "Включить Ollama? (требуется GPU или много RAM)",
+            default=True
+        )
+    else:
+        ollama_enabled = Confirm.ask(
+            "Включить Ollama? [yellow](не рекомендуется без GPU)[/yellow]",
+            default=False
+        )
+    
+    services_config['ollama_enabled'] = ollama_enabled
+    
+    if ollama_enabled:
+        services_config['ollama_port'] = IntPrompt.ask("Порт для Ollama", default=11434)
+        services_config['ollama_memory_limit'] = f"{recommended_config['memory_limits']['ollama']:.1f}g"
+        services_config['ollama_cpu_limit'] = recommended_config['cpu_limits']['ollama']
+        services_config['ollama_image'] = recommended_config['ollama_image']
+    
+    return services_config
+
+
+def configure_supabase_keys() -> dict:
+    """Настройка ключей Supabase"""
+    console.print("\n[yellow]🔑 Ключи Supabase:[/yellow]")
+    console.print("[yellow]💡[/yellow] Генерация: https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys")
+    console.print("[cyan]Ссылка открыта в браузере или скопируйте её[/cyan]\n")
+    
+    # Пытаемся открыть ссылку
+    import webbrowser
+    try:
+        webbrowser.open("https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys")
+    except Exception:
+        pass
+    
+    # Генерируем ключи автоматически
+    console.print("[green]✓ Автоматическая генерация ключей Supabase...[/green]")
+    keys = generate_supabase_keys_proper()
+    
+    console.print(f"\n[cyan]Сгенерированные ключи:[/cyan]")
+    console.print(f"  JWT_SECRET: {keys['jwt_secret'][:20]}...")
+    console.print(f"  ANON_KEY: {keys['anon_key'][:20]}...")
+    console.print(f"  SERVICE_ROLE_KEY: {keys['service_role_key'][:20]}...")
+    
+    # Позволяем пользователю ввести свои ключи если хочет
+    use_custom = Confirm.ask("\nИспользовать свои ключи Supabase?", default=False)
+    
+    if use_custom:
+        while True:
+            jwt_secret = Prompt.ask("JWT_SECRET (минимум 32 символов)", default="")
+            if len(jwt_secret) >= 32:
+                keys['jwt_secret'] = jwt_secret
+                # Перегенерируем остальные ключи на основе нового JWT_SECRET
+                keys = generate_supabase_keys_proper()
+                keys['jwt_secret'] = jwt_secret
+                break
+            else:
+                console.print("[red]❌ JWT_SECRET должен быть минимум 32 символа[/red]")
+        
+        anon_key = Prompt.ask("ANON_KEY (или оставьте пустым для автогенерации)", default="")
+        if anon_key:
+            keys['anon_key'] = anon_key
+        
+        service_key = Prompt.ask("SERVICE_ROLE_KEY (или оставьте пустым для автогенерации)", default="")
+        if service_key:
+            keys['service_role_key'] = service_key
+    
+    return keys
+
+
+def main():
+    """Главная функция установщика"""
+    try:
+        # 0. Установка зависимостей
+        install_dependencies()
+        
+        # 1. Приветствие
+        show_welcome()
+        
+        # 2. Проверка системных требований
+        if not check_system_requirements():
+            console.print("\n[red]Установка прервана из-за ошибок[/red]")
+            sys.exit(1)
+        
+        # 3. Определение железа
+        console.print("\n[cyan]🔍 Анализ системы...[/cyan]")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Определение характеристик...", total=None)
+            hardware = detect_hardware()
+            progress.update(task, completed=True)
+        
+        show_hardware_info(hardware)
+        
+        # 4. Адаптация под железо
+        recommended_config = adapt_config_for_hardware(hardware)
+        
+        # Показываем рекомендации
+        if recommended_config.get('warnings'):
+            console.print("\n[yellow]⚠ Предупреждения:[/yellow]")
+            for warning in recommended_config['warnings']:
+                console.print(Panel(warning, border_style="yellow"))
+        
+        if recommended_config.get('errors'):
+            console.print("\n[red]❌ Ошибки:[/red]")
+            for error in recommended_config['errors']:
+                console.print(Panel(error, border_style="red"))
+            
+            if not Confirm.ask("Продолжить установку несмотря на ошибки?", default=False):
+                sys.exit(1)
+        
+        # Показываем рекомендуемые настройки
+        summary = get_resource_summary(recommended_config)
+        console.print(f"\n[cyan]💡 Рекомендуемые настройки:[/cyan]")
+        console.print(f"  CPU: {summary['total_cpu_cores']:.1f} ядер")
+        console.print(f"  RAM: {summary['total_memory_gb']:.1f} GB")
+        console.print(f"  Сервисов: {summary['services_count']}")
+        
+        if recommended_config.get('use_gpu'):
+            console.print("[green]✓ GPU обнаружена - можно использовать Ollama[/green]")
+        
+        # 5. Проверка ресурсов
+        if not display_resource_check(hardware, recommended_config):
+            if not Confirm.ask("\nПродолжить установку?", default=False):
+                sys.exit(1)
+        
+        # 6. Выбор режима маршрутизации
+        routing_mode = select_routing_mode()
+        
+        # 7. Настройка доменов
+        domains_config = {}
+        if routing_mode != 'none':
+            domains_config = configure_domains(routing_mode)
+        
+        # 8. Настройка сервисов
+        services_config = configure_services(recommended_config, hardware)
+        
+        # 9. Настройка ключей Supabase
+        supabase_keys = configure_supabase_keys()
+        services_config.update(supabase_keys)
+        
+        # 10. Объединяем конфигурацию
+        full_config = {
+            'routing_mode': routing_mode,
+            **domains_config,
+            **services_config,
+            **recommended_config
+        }
+        
+        # 11. Генерация конфигов
+        console.print("\n[cyan]📝 Генерация конфигурационных файлов...[/cyan]")
+        
+        # Создаем структуру папок
+        ensure_dir("volumes/n8n_data")
+        ensure_dir("volumes/langflow_data")
+        ensure_dir("volumes/supabase_data")
+        if full_config.get('ollama_enabled'):
+            ensure_dir("volumes/ollama_data")
+        
+        # Генерируем .env
+        generate_env_file(full_config)
+        console.print("[green]✓ .env файл создан[/green]")
+        
+        # Генерируем docker-compose.yml
+        generate_docker_compose(full_config, hardware)
+        console.print("[green]✓ docker-compose.yml создан[/green]")
+        
+        # Генерируем Nginx конфиги если нужны
+        if routing_mode != 'none':
+            generate_nginx_configs(full_config)
+            console.print("[green]✓ Nginx конфиги созданы[/green]")
+        
+        # 12. Запуск сервисов
+        console.print("\n[cyan]🚀 Готово к запуску![/cyan]")
+        if Confirm.ask("Запустить сервисы сейчас?", default=True):
+            console.print("\n[cyan]Запуск сервисов...[/cyan]")
+            if docker_compose_up():
+                console.print("[green]✓ Сервисы запущены![/green]")
+                
+                # Показываем информацию для доступа
+                console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
+                if routing_mode == 'subdomain':
+                    if full_config.get('n8n_domain'):
+                        console.print(f"  N8N: http{'s' if full_config.get('ssl_enabled') else ''}://{full_config['n8n_domain']}")
+                    if full_config.get('langflow_domain'):
+                        console.print(f"  Langflow: http{'s' if full_config.get('ssl_enabled') else ''}://{full_config['langflow_domain']}")
+                elif routing_mode == 'path':
+                    if full_config.get('base_domain'):
+                        console.print(f"  N8N: http{'s' if full_config.get('ssl_enabled') else ''}://{full_config['base_domain']}{full_config.get('n8n_path', '/n8n')}")
+                else:
+                    console.print(f"  N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
+                    console.print(f"  Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
+                    console.print(f"  Supabase: http://localhost:{full_config.get('supabase_port', 8000)}")
+            else:
+                console.print("[red]❌ Ошибка при запуске сервисов[/red]")
+                console.print("   Проверьте логи: docker-compose logs")
+        
+        console.print("\n[green]✓ Установка завершена![/green]")
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Установка прервана пользователем[/yellow]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n[red]❌ Ошибка: {e}[/red]")
+        import traceback
+        console.print(traceback.format_exc())
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
