@@ -119,27 +119,20 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
     if file:
         cmd.extend(['-f', file])
     
-    cmd.append('up')
-    
-    if detach:
-        cmd.append('-d')
-    
     try:
-        console.print("[cyan]Запуск Docker Compose...[/cyan]")
-        console.print(f"[dim]Команда: {' '.join(cmd)}[/dim]\n")
-        
-        # Запускаем команду
-        # Для detach режима используем capture_output для быстрого завершения
-        # Для не-detach показываем вывод напрямую
         if detach:
-            # В detach режиме команда должна завершиться быстро
-            # Показываем прогресс через спиннер, но не блокируем вывод
-            console.print("[dim]Загрузка образов и запуск контейнеров...[/dim]")
+            # ЭТАП 1: Загрузка образов с детальным прогрессом
+            console.print("[cyan]📥 Загрузка образов Docker...[/cyan]")
             console.print("[dim]Это может занять несколько минут при первой установке[/dim]\n")
             
-            # Запускаем команду с выводом в реальном времени
-            process = subprocess.Popen(
-                cmd,
+            pull_cmd = get_docker_compose_command()
+            if file:
+                pull_cmd.extend(['-f', file])
+            pull_cmd.append('pull')
+            
+            # Запускаем pull с выводом в реальном времени
+            pull_process = subprocess.Popen(
+                pull_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -147,38 +140,84 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
                 universal_newlines=True
             )
             
-            # Показываем важные строки вывода
-            important_keywords = ['pulling', 'creating', 'starting', 'started', 'error', 'failed', 'warning']
-            output_buffer = []
-            
+            # Показываем весь вывод pull с прогрессом
+            pull_output = []
             try:
-                for line in process.stdout:
-                    line = line.strip()
+                for line in pull_process.stdout:
+                    line = line.rstrip()
                     if line:
-                        output_buffer.append(line)
-                        # Показываем только важные строки
-                        if any(keyword in line.lower() for keyword in important_keywords):
+                        pull_output.append(line)
+                        # Показываем все строки с прогрессом загрузки
+                        if any(keyword in line.lower() for keyword in ['pulling', 'downloading', 'extracting', 'pull complete', 'already exists', 'error', 'failed', 'waiting', 'verifying']):
+                            console.print(f"[dim]{line}[/dim]")
+                        # Показываем прогресс слоев (проценты, размеры)
+                        elif '%' in line or 'mb' in line.lower() or 'kb' in line.lower() or 'gb' in line.lower():
+                            console.print(f"[dim]{line}[/dim]")
+                        # Показываем статусы слоев
+                        elif 'layer' in line.lower() or 'digest:' in line.lower() or 'status:' in line.lower():
                             console.print(f"[dim]{line}[/dim]")
                 
-                # Ждем завершения процесса
-                return_code = process.wait(timeout=600)
+                pull_return_code = pull_process.wait(timeout=600)
             except subprocess.TimeoutExpired:
-                process.kill()
-                console.print("[red]❌ Таймаут при запуске сервисов (более 10 минут)[/red]")
+                pull_process.kill()
+                console.print("[red]❌ Таймаут при загрузке образов (более 10 минут)[/red]")
                 return False
             
-            if return_code != 0:
-                console.print(f"[red]❌ Ошибка при запуске сервисов (код: {return_code})[/red]")
-                # Показываем последние строки вывода
-                if output_buffer:
+            if pull_return_code != 0:
+                console.print(f"[red]❌ Ошибка при загрузке образов (код: {pull_return_code})[/red]")
+                if pull_output:
                     console.print(f"[yellow]Последние строки вывода:[/yellow]")
-                    for line in output_buffer[-10:]:
+                    for line in pull_output[-10:]:
+                        console.print(f"[dim]{line}[/dim]")
+                return False
+            
+            console.print("[green]✓ Образы загружены[/green]\n")
+            
+            # ЭТАП 2: Запуск контейнеров
+            console.print("[cyan]🚀 Запуск контейнеров...[/cyan]\n")
+            
+            up_cmd = get_docker_compose_command()
+            if file:
+                up_cmd.extend(['-f', file])
+            up_cmd.extend(['up', '-d'])
+            
+            # Запускаем up с выводом
+            up_process = subprocess.Popen(
+                up_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            up_output = []
+            try:
+                for line in up_process.stdout:
+                    line = line.rstrip()
+                    if line:
+                        up_output.append(line)
+                        # Показываем важные строки запуска
+                        if any(keyword in line.lower() for keyword in ['creating', 'starting', 'started', 'error', 'failed', 'warning', 'container']):
+                            console.print(f"[dim]{line}[/dim]")
+                
+                up_return_code = up_process.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                up_process.kill()
+                console.print("[red]❌ Таймаут при запуске контейнеров[/red]")
+                return False
+            
+            if up_return_code != 0:
+                console.print(f"[red]❌ Ошибка при запуске контейнеров (код: {up_return_code})[/red]")
+                if up_output:
+                    console.print(f"[yellow]Последние строки вывода:[/yellow]")
+                    for line in up_output[-10:]:
                         console.print(f"[dim]{line}[/dim]")
                 console.print(f"\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
-                console.print(f"[dim]{' '.join(cmd)}[/dim]")
+                console.print(f"[dim]{' '.join(up_cmd)}[/dim]")
                 return False
             
-            console.print("[green]✓ Сервисы запущены[/green]")
+            console.print("[green]✓ Контейнеры запущены[/green]")
             
             # Даем время контейнерам запуститься
             import time
