@@ -3,7 +3,7 @@
 ## Основные файлы
 
 ```
-n8n_langflow_supabase_0.1/
+n8n_langflow_supabase_in_docker/
 ├── setup.py                    # Интерактивный установщик
 ├── update.py                   # Скрипт обновления
 ├── requirements.txt            # Python зависимости
@@ -84,13 +84,13 @@ n8n_langflow_supabase_0.1/
 ### Первая установка
 
 ```bash
-python setup.py
+python3 setup.py
 ```
 
 ### Обновление
 
 ```bash
-python update.py
+python3 update.py
 ```
 
 ### Управление сервисами

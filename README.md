@@ -22,21 +22,29 @@
 ### 1. Клонируйте репозиторий
 
 ```bash
-git clone https://github.com/yourusername/n8n_langflow_supabase_0.1.git
-cd n8n_langflow_supabase_0.1
+git clone https://github.com/SerKit163/n8n_langflow_supabase_in_docker.git
+cd n8n_langflow_supabase_in_docker
 ```
 
 ### 2. Установите Python зависимости
 
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
+# или
+python3 -m pip install -r requirements.txt
 ```
 
 ### 3. Запустите установщик
 
 ```bash
-python setup.py
+python3 setup.py
 ```
+
+> **Примечание:** Если команда `python` не найдена, используйте `python3`. 
+> Или установите пакет `python-is-python3` для создания симлинка:
+> ```bash
+> sudo apt install python-is-python3
+> ```
 
 Установщик автоматически:
 - Определит характеристики вашего железа
@@ -50,7 +58,7 @@ python setup.py
 Для обновления всех сервисов до последних версий:
 
 ```bash
-python update.py
+python3 update.py
 ```
 
 Скрипт:
@@ -165,7 +173,7 @@ docker-compose restart [service_name]
 ## 📁 Структура проекта
 
 ```
-n8n_langflow_supabase_0.1/
+n8n_langflow_supabase_in_docker/
 ├── setup.py              # Интерактивный установщик
 ├── update.py             # Скрипт обновления
 ├── docker-compose.yml    # Docker Compose конфигурация

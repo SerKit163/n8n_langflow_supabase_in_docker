@@ -17,7 +17,8 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
     """
     cpu_cores = hardware_info['cpu']['cores']
     total_ram = hardware_info['ram']['total_gb']
-    has_gpu = hardware_info['gpu']['available']
+    # Для Ollama нужна NVIDIA GPU с CUDA, не просто любая GPU
+    has_gpu = hardware_info['gpu']['available'] and hardware_info['gpu'].get('cuda_available', False)
     
     # Базовые лимиты CPU (в долях от общего количества ядер)
     config = {
@@ -51,7 +52,7 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
     
     # Проверка Ollama
     if not has_gpu and total_ram < 16:
-        warnings.append("Ollama не рекомендуется без GPU и менее 16 GB RAM")
+        warnings.append("Ollama не рекомендуется без NVIDIA GPU с CUDA и менее 16 GB RAM")
     
     # Проверка диска
     free_disk = hardware_info['disk']['free_gb']

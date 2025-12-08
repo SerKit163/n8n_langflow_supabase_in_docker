@@ -5,16 +5,18 @@
 ### 1. Клонирование и установка зависимостей
 
 ```bash
-git clone https://github.com/yourusername/n8n_langflow_supabase_0.1.git
-cd n8n_langflow_supabase_0.1
-pip install -r requirements.txt
+git clone https://github.com/SerKit163/n8n_langflow_supabase_in_docker.git
+cd n8n_langflow_supabase_in_docker
+pip3 install -r requirements.txt
 ```
 
 ### 2. Запуск установщика
 
 ```bash
-python setup.py
+python3 setup.py
 ```
+
+> **Примечание:** Если команда `python` не найдена, используйте `python3`
 
 Следуйте инструкциям установщика:
 - Выберите режим маршрутизации (поддомены/пути/порты)
@@ -32,7 +34,7 @@ python setup.py
 ## Обновление
 
 ```bash
-python update.py
+python3 update.py
 ```
 
 ## Управление сервисами

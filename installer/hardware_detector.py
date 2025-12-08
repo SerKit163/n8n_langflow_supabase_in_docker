@@ -75,7 +75,12 @@ def detect_ram() -> Dict:
 
 
 def detect_gpu() -> Dict:
-    """Определяет наличие и характеристики GPU"""
+    """
+    Определяет наличие и характеристики GPU
+    
+    Важно: Для Ollama нужна NVIDIA GPU с CUDA поддержкой.
+    Intel GPU и встроенные GPU не поддерживаются.
+    """
     gpu_info = {
         'available': False,
         'vendor': None,
@@ -85,23 +90,26 @@ def detect_gpu() -> Dict:
         'devices': []
     }
     
-    # Проверяем NVIDIA GPU
+    # Проверяем NVIDIA GPU (единственная поддерживаемая для Ollama)
     nvidia_gpu = detect_nvidia_gpu()
-    if nvidia_gpu:
+    if nvidia_gpu and nvidia_gpu.get('cuda_available', False):
         gpu_info.update(nvidia_gpu)
         return gpu_info
     
     # Проверяем AMD GPU (через rocm-smi если доступен)
+    # AMD GPU может работать с некоторыми моделями, но не так хорошо как NVIDIA
     amd_gpu = detect_amd_gpu()
     if amd_gpu:
-        gpu_info.update(amd_gpu)
-        return gpu_info
+        # AMD GPU не имеет CUDA, но может иметь ROCm
+        # Для Ollama это не поддерживается, но оставляем для информации
+        amd_gpu['cuda_available'] = False
+        # Не считаем доступной для Ollama
+        # gpu_info.update(amd_gpu)
+        # return gpu_info
+        pass
     
-    # Проверяем Intel GPU
-    intel_gpu = detect_intel_gpu()
-    if intel_gpu:
-        gpu_info.update(intel_gpu)
-        return gpu_info
+    # Intel GPU не проверяем - она не поддерживается Ollama
+    # intel_gpu = detect_intel_gpu()
     
     return gpu_info
 
@@ -203,29 +211,39 @@ def detect_amd_gpu() -> Optional[Dict]:
 
 
 def detect_intel_gpu() -> Optional[Dict]:
-    """Определяет Intel GPU"""
-    try:
-        if platform.system() == "Linux":
-            # Проверяем через lspci
-            result = subprocess.run(
-                ['lspci'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0 and 'Intel' in result.stdout and 'VGA' in result.stdout:
-                return {
-                    'available': True,
-                    'vendor': 'Intel',
-                    'model': 'Intel GPU',
-                    'memory_gb': 0,
-                    'cuda_available': False,
-                    'devices': []
-                }
-    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
-        pass
+    """
+    Определяет Intel GPU
     
+    Примечание: Intel GPU на VPS обычно не поддерживает CUDA
+    и не может использоваться для Ollama, поэтому не считаем её доступной
+    """
+    # Intel GPU не поддерживается Ollama, поэтому не возвращаем её как доступную
+    # Для Ollama нужна NVIDIA GPU с CUDA или специальная поддержка
     return None
+    
+    # Старый код (закомментирован, так как Intel GPU не подходит для Ollama):
+    # try:
+    #     if platform.system() == "Linux":
+    #         # Проверяем через lspci
+    #         result = subprocess.run(
+    #             ['lspci'],
+    #             capture_output=True,
+    #             text=True,
+    #             timeout=5
+    #         )
+    #         if result.returncode == 0 and 'Intel' in result.stdout and 'VGA' in result.stdout:
+    #             return {
+    #                 'available': True,
+    #                 'vendor': 'Intel',
+    #                 'model': 'Intel GPU',
+    #                 'memory_gb': 0,
+    #                 'cuda_available': False,
+    #                 'devices': []
+    #             }
+    # except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+    #     pass
+    # 
+    # return None
 
 
 def detect_disk() -> Dict:
