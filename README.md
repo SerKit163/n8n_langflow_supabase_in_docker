@@ -22,7 +22,7 @@
 ### 1. Клонируйте репозиторий
 
 ```bash
-https://github.com/SerKit163/n8n_langflow_supabase_in_docker.git
+git clone https://github.com/SerKit163/n8n_langflow_supabase_in_docker.git
 cd n8n_langflow_supabase_in_docker
 ```
 
