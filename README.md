@@ -22,8 +22,8 @@
 ### 1. Клонируйте репозиторий
 
 ```bash
-git clone https://github.com/yourusername/n8n_langflow_supabase_0.1.git
-cd n8n_langflow_supabase_0.1
+git clone https://github.com/yourusername/n8n_langflow_supabase_in_docker.git
+cd n8n_langflow_supabase_in_docker
 ```
 
 ### 2. Установите Python зависимости
