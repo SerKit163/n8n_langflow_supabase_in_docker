@@ -72,7 +72,7 @@ services:
         mkdir -p /app/data/logs
         chown -R root:root /app/data || true
         chmod -R 755 /app/data || true
-        exec langflow run --host 0.0.0.0 --port 7860 --backend-only=false
+        exec langflow run --host 0.0.0.0 --port 7860
       "
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7860/health || exit 1"]
@@ -176,30 +176,34 @@ services:
     restart: unless-stopped
 
   nginx-proxy:
-    image: jwilder/nginx-proxy:latest
+    image: nginxproxy/nginx-proxy:latest
     container_name: nginx-proxy
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-      - certs:/etc/nginx/certs
-      - vhost.d:/etc/nginx/vhost.d
-      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certs:/etc/nginx/certs:ro
+      - vhost.d:/etc/nginx/vhost.d:ro
+      - html:/usr/share/nginx/html:ro
     networks:
       - proxy
     restart: unless-stopped
+    labels:
+      - "com.github.nginx-proxy.nginx-proxy"
 
   nginx-proxy-letsencrypt:
-    image: jrcs/letsencrypt-nginx-proxy-companion:latest
+    image: nginxproxy/acme-companion:latest
     container_name: nginx-proxy-letsencrypt
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - certs:/etc/nginx/certs
-      - vhost.d:/etc/nginx/vhost.d
-      - html:/usr/share/nginx/html
+      - certs:/etc/nginx/certs:rw
+      - vhost.d:/etc/nginx/vhost.d:rw
+      - html:/usr/share/nginx/html:rw
+      - acme:/etc/acme.sh
     environment:
       - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL:-}
+      - NGINX_PROXY_CONTAINER=nginx-proxy
     networks:
       - proxy
     depends_on:
@@ -218,6 +222,8 @@ volumes:
   vhost.d:
     driver: local
   html:
+    driver: local
+  acme:
     driver: local
 
 networks:
