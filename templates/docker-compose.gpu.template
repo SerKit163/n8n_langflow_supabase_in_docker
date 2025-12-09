@@ -20,6 +20,12 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
+    entrypoint: |
+      sh -c "
+        chown -R node:node /home/node/.n8n || true
+        chmod -R 755 /home/node/.n8n || true
+        exec tini -- /docker-entrypoint.sh
+      "
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
       interval: 30s
@@ -50,7 +56,8 @@ services:
     entrypoint: |
       sh -c "
         mkdir -p /app/data/.cache/langflow
-        chmod -R 755 /app/data
+        mkdir -p /app/data/logs
+        chmod -R 755 /app/data || true
         exec langflow run --host 0.0.0.0 --port 7860
       "
     healthcheck:
@@ -127,6 +134,12 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    entrypoint: |
+      sh -c "
+        mkdir -p /root/.ollama
+        chmod -R 755 /root/.ollama || true
+        exec /bin/ollama serve
+      "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
