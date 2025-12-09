@@ -47,6 +47,12 @@ services:
     volumes:
       - langflow_data:/app/data
     restart: unless-stopped
+    entrypoint: |
+      sh -c "
+        mkdir -p /app/data/.cache/langflow
+        chmod -R 755 /app/data
+        exec langflow run --host 0.0.0.0 --port 7860
+      "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
       interval: 30s
