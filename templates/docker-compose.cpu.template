@@ -46,6 +46,8 @@ services:
       - LANGFLOW_API_KEY=${LANGFLOW_API_KEY:-}
       - LANGFLOW_HOST=0.0.0.0
       - LANGFLOW_PORT=7860
+      - LANGFLOW_CACHE_TYPE=memory
+      - LANGFLOW_LANGCHAIN_CACHE=memory
       - VIRTUAL_HOST=${VIRTUAL_HOST_LANGFLOW:-}
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST_LANGFLOW:-}
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
@@ -70,14 +72,14 @@ services:
         mkdir -p /app/data/logs
         chown -R root:root /app/data || true
         chmod -R 755 /app/data || true
-        exec langflow run --host 0.0.0.0 --port 7860
+        exec langflow run --host 0.0.0.0 --port 7860 --backend-only=false
       "
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7860/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   supabase-db:
     image: ghcr.io/supabase/postgres:15.1.0.119
@@ -124,6 +126,12 @@ services:
       - SUPABASE_URL=http://supabase-rest:3000
       - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL:-http://localhost:3000}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - STUDIO_PGUSER=postgres
+      - STUDIO_PGPASSWORD=${POSTGRES_PASSWORD}
+      - DEFAULT_ORGANIZATION_NAME=Default Organization
+      - DEFAULT_PROJECT_NAME=Default Project
+      - SUPABASE_DB_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - SUPABASE_DB_PASSWORD=${POSTGRES_PASSWORD}
       - VIRTUAL_HOST=${VIRTUAL_HOST_SUPABASE:-}
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST_SUPABASE:-}
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
@@ -131,6 +139,7 @@ services:
       - "127.0.0.1:${SUPABASE_KB_PORT:-3000}:3000"
     depends_on:
       - supabase-rest
+      - supabase-db
     networks:
       - proxy
     restart: unless-stopped
@@ -161,6 +170,7 @@ services:
       - PGRST_DB_SCHEMAS=public,storage,graphql_public
       - PGRST_DB_ANON_ROLE=anon
       - PGRST_SERVER_HOST=0.0.0.0
+      - PGRST_SERVER_PORT=3000
     networks:
       - proxy
     restart: unless-stopped

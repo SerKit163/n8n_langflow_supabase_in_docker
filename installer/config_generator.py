@@ -28,11 +28,16 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
     webhook_url = f"http://localhost:{config.get('n8n_port', 5678)}/"
     supabase_public_url = f"http://localhost:{config.get('supabase_kb_port', 3000)}"
     
+    # Получаем домены и email для проверки
+    n8n_domain = config.get('n8n_domain', '') or ''
+    langflow_domain = config.get('langflow_domain', '') or ''
+    supabase_domain = config.get('supabase_domain', '') or ''
+    ollama_domain = config.get('ollama_domain', '') or ''
+    letsencrypt_email = config.get('letsencrypt_email', '') or ''
+    ollama_enabled = config.get('ollama_enabled', False)
+    
     if routing_mode == 'subdomain':
-        n8n_domain = config.get('n8n_domain', '')
-        supabase_domain = config.get('supabase_domain', '')
-        letsencrypt_email = config.get('letsencrypt_email', '')
-        
+        # Если домены указаны и есть email для SSL, используем HTTPS
         if n8n_domain and letsencrypt_email:
             n8n_protocol = 'https'
             webhook_url = f"https://{n8n_domain}/"
@@ -43,16 +48,16 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
     # Заменяем переменные
     replacements = {
         'ROUTING_MODE': routing_mode,
-        'N8N_DOMAIN': config.get('n8n_domain', ''),
-        'LANGFLOW_DOMAIN': config.get('langflow_domain', ''),
-        'SUPABASE_DOMAIN': config.get('supabase_domain', ''),
-        'OLLAMA_DOMAIN': config.get('ollama_domain', ''),
+        'N8N_DOMAIN': n8n_domain,
+        'LANGFLOW_DOMAIN': langflow_domain,
+        'SUPABASE_DOMAIN': supabase_domain,
+        'OLLAMA_DOMAIN': ollama_domain,
         'BASE_DOMAIN': config.get('base_domain', ''),
         'N8N_PATH': config.get('n8n_path', '/n8n'),
         'LANGFLOW_PATH': config.get('langflow_path', '/langflow'),
         'SUPABASE_PATH': config.get('supabase_path', '/supabase'),
         'OLLAMA_PATH': config.get('ollama_path', '/ollama'),
-        'LETSENCRYPT_EMAIL': config.get('letsencrypt_email', ''),
+        'LETSENCRYPT_EMAIL': letsencrypt_email,
         'N8N_PORT': str(config.get('n8n_port', 5678)),
         'LANGFLOW_PORT': str(config.get('langflow_port', 7860)),
         'SUPABASE_PORT': str(config.get('supabase_port', 8000)),
@@ -72,19 +77,19 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'JWT_SECRET': config.get('jwt_secret', ''),
         'ANON_KEY': config.get('anon_key', ''),
         'SERVICE_ROLE_KEY': config.get('service_role_key', ''),
-        'OLLAMA_ENABLED': 'true' if config.get('ollama_enabled', False) else 'false',
+        'OLLAMA_ENABLED': 'true' if ollama_enabled else 'false',
         'N8N_PROTOCOL': n8n_protocol,
         'WEBHOOK_URL': webhook_url,
         'SUPABASE_PUBLIC_URL': supabase_public_url,
-        # Переменные для nginx-proxy
-        'VIRTUAL_HOST_N8N': config.get('n8n_domain', '') if routing_mode == 'subdomain' else '',
-        'LETSENCRYPT_HOST_N8N': config.get('n8n_domain', '') if routing_mode == 'subdomain' and config.get('letsencrypt_email') else '',
-        'VIRTUAL_HOST_LANGFLOW': config.get('langflow_domain', '') if routing_mode == 'subdomain' else '',
-        'LETSENCRYPT_HOST_LANGFLOW': config.get('langflow_domain', '') if routing_mode == 'subdomain' and config.get('letsencrypt_email') else '',
-        'VIRTUAL_HOST_SUPABASE': config.get('supabase_domain', '') if routing_mode == 'subdomain' else '',
-        'LETSENCRYPT_HOST_SUPABASE': config.get('supabase_domain', '') if routing_mode == 'subdomain' and config.get('letsencrypt_email') else '',
-        'VIRTUAL_HOST_OLLAMA': config.get('ollama_domain', '') if routing_mode == 'subdomain' and config.get('ollama_enabled') else '',
-        'LETSENCRYPT_HOST_OLLAMA': config.get('ollama_domain', '') if routing_mode == 'subdomain' and config.get('ollama_enabled') and config.get('letsencrypt_email') else '',
+        # Переменные для nginx-proxy (заполняются только если routing_mode=subdomain и домены указаны)
+        'VIRTUAL_HOST_N8N': n8n_domain if routing_mode == 'subdomain' else '',
+        'LETSENCRYPT_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_domain and letsencrypt_email else '',
+        'VIRTUAL_HOST_LANGFLOW': langflow_domain if routing_mode == 'subdomain' else '',
+        'LETSENCRYPT_HOST_LANGFLOW': langflow_domain if routing_mode == 'subdomain' and langflow_domain and letsencrypt_email else '',
+        'VIRTUAL_HOST_SUPABASE': supabase_domain if routing_mode == 'subdomain' else '',
+        'LETSENCRYPT_HOST_SUPABASE': supabase_domain if routing_mode == 'subdomain' and supabase_domain and letsencrypt_email else '',
+        'VIRTUAL_HOST_OLLAMA': ollama_domain if routing_mode == 'subdomain' and ollama_enabled else '',
+        'LETSENCRYPT_HOST_OLLAMA': ollama_domain if routing_mode == 'subdomain' and ollama_enabled and ollama_domain and letsencrypt_email else '',
     }
     
     # Заменяем все переменные в шаблоне

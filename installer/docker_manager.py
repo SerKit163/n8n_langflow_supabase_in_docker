@@ -122,194 +122,35 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
     
     try:
         if detach:
-            # ЭТАП 1: Загрузка образов с детальным прогрессом
+            # ЭТАП 1: Загрузка образов - используем встроенный вывод Docker Compose
             console.print("[cyan]📥 Загрузка образов Docker...[/cyan]")
-            console.print("[dim]Это может занять несколько минут при первой установке[/dim]\n")
+            console.print("[dim]💡 Это может занять несколько минут при первой установке[/dim]\n")
             
             pull_cmd = get_docker_compose_command()
             if file:
                 pull_cmd.extend(['-f', file])
             pull_cmd.append('pull')
             
-            # Запускаем pull с выводом в реальном времени
-            pull_process = subprocess.Popen(
-                pull_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            # Определяем образы из docker-compose.yml
-            images_to_track = {}
+            # Запускаем pull с прямым выводом в консоль (Docker Compose сам показывает прогресс-бары)
             try:
-                if file:
-                    compose_file = file
-                else:
-                    compose_file = "docker-compose.yml"
-                
-                with open(compose_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    # Ищем образы
-                    if 'n8nio/n8n' in content or 'n8n' in content.lower():
-                        images_to_track['n8n'] = {'status': 'waiting', 'task_id': None}
-                    if 'langflowai/langflow' in content or 'langflow' in content.lower():
-                        images_to_track['langflow'] = {'status': 'waiting', 'task_id': None}
-                    if 'supabase' in content.lower():
-                        images_to_track['supabase'] = {'status': 'waiting', 'task_id': None}
-                    if 'ollama' in content.lower():
-                        images_to_track['ollama'] = {'status': 'waiting', 'task_id': None}
-            except Exception:
-                # Если не удалось прочитать файл, используем стандартный набор
-                images_to_track = {
-                    'n8n': {'status': 'waiting', 'task_id': None},
-                    'langflow': {'status': 'waiting', 'task_id': None},
-                    'supabase': {'status': 'waiting', 'task_id': None}
-                }
-            
-            pull_output = []
-            current_image_name = None
-            
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-                transient=False
-            ) as progress:
-                # Создаем задачи для каждого образа
-                for img_name in images_to_track.keys():
-                    task_id = progress.add_task(
-                        f"[dim]{img_name.capitalize()}: ожидание...[/dim]",
-                        total=None
-                    )
-                    images_to_track[img_name]['task_id'] = task_id
-                
-                try:
-                    for line in pull_process.stdout:
-                        line = line.rstrip()
-                        if not line:
-                            continue
-                        
-                        pull_output.append(line)
-                        line_lower = line.lower()
-                        
-                        # Определяем, какой образ загружается - улучшенный парсинг
-                        detected_image = None
-                        
-                        # Паттерн 1: "Pulling n8n ..." или "Pulling langflow ..." (имя сервиса)
-                        service_match = re.search(r'pulling\s+([a-z-]+)', line_lower)
-                        if service_match:
-                            service_name = service_match.group(1)
-                            # Проверяем соответствие с отслеживаемыми образами
-                            for img_name in images_to_track.keys():
-                                if service_name == img_name or service_name.replace('-', '') == img_name.replace('-', ''):
-                                    detected_image = img_name
-                                    break
-                        
-                        # Паттерн 2: полное имя образа в строке (n8nio/n8n, langflowai/langflow и т.д.)
-                        if not detected_image:
-                            if 'n8nio/n8n' in line_lower or 'n8nio/n8n:' in line:
-                                detected_image = 'n8n'
-                            elif 'langflowai/langflow' in line_lower or 'langflowai/langflow:' in line:
-                                detected_image = 'langflow'
-                            elif 'supabase/postgres' in line_lower or 'supabase/postgres:' in line:
-                                detected_image = 'supabase'
-                            elif 'supabase/studio' in line_lower or 'supabase/studio:' in line:
-                                detected_image = 'supabase'
-                            elif 'ollama/ollama' in line_lower or 'ollama/ollama:' in line:
-                                detected_image = 'ollama'
-                        
-                        # Паттерн 3: по ключевым словам в контексте загрузки
-                        if not detected_image:
-                            if ('n8n' in line_lower and ('pulling' in line_lower or 'image' in line_lower)) and 'n8nio' not in line_lower:
-                                # Проверяем, что это не ложное срабатывание
-                                if 'supabase' not in line_lower:
-                                    detected_image = 'n8n'
-                            elif ('langflow' in line_lower and ('pulling' in line_lower or 'image' in line_lower)) and 'langflowai' not in line_lower:
-                                detected_image = 'langflow'
-                            elif ('supabase' in line_lower and ('pulling' in line_lower or 'image' in line_lower)):
-                                detected_image = 'supabase'
-                            elif ('ollama' in line_lower and ('pulling' in line_lower or 'image' in line_lower)):
-                                detected_image = 'ollama'
-                        
-                        # Обновляем текущий образ, если обнаружен
-                        if detected_image and detected_image in images_to_track:
-                            if current_image_name != detected_image:
-                                current_image_name = detected_image
-                                task_id = images_to_track[detected_image]['task_id']
-                                images_to_track[detected_image]['status'] = 'pulling'
-                                progress.update(
-                                    task_id,
-                                    description=f"[cyan]{detected_image.capitalize()}: загрузка...[/cyan]"
-                                )
-                        
-                        # Обновляем статус текущего образа
-                        if current_image_name and current_image_name in images_to_track:
-                            task_id = images_to_track[current_image_name]['task_id']
-                            
-                            # Определяем этап загрузки
-                            if 'downloading' in line_lower or 'pulling' in line_lower:
-                                progress.update(
-                                    task_id,
-                                    description=f"[cyan]{current_image_name.capitalize()}: скачивание...[/cyan]"
-                                )
-                            elif 'extracting' in line_lower:
-                                progress.update(
-                                    task_id,
-                                    description=f"[yellow]{current_image_name.capitalize()}: распаковка...[/yellow]"
-                                )
-                            elif 'verifying' in line_lower or 'verifying checksum' in line_lower:
-                                progress.update(
-                                    task_id,
-                                    description=f"[yellow]{current_image_name.capitalize()}: проверка...[/yellow]"
-                                )
-                            elif 'pull complete' in line_lower or 'already exists' in line_lower or 'up to date' in line_lower:
-                                progress.update(
-                                    task_id,
-                                    description=f"[green]✓ {current_image_name.capitalize()}: загружен[/green]"
-                                )
-                                images_to_track[current_image_name]['status'] = 'complete'
-                                current_image_name = None
-                            elif 'error' in line_lower or 'failed' in line_lower:
-                                progress.update(
-                                    task_id,
-                                    description=f"[red]❌ {current_image_name.capitalize()}: ошибка[/red]"
-                                )
-                                images_to_track[current_image_name]['status'] = 'error'
-                    
-                    pull_return_code = pull_process.wait(timeout=600)
-                    
-                    # Обновляем все задачи на завершенные
-                    if pull_return_code == 0:
-                        for img_name, info in images_to_track.items():
-                            if info['status'] != 'complete':
-                                progress.update(
-                                    info['task_id'],
-                                    description=f"[green]✓ {img_name.capitalize()}: готов[/green]"
-                                )
-                except subprocess.TimeoutExpired:
-                    pull_process.kill()
-                    for img_name, info in images_to_track.items():
-                        if info['status'] != 'complete':
-                            progress.update(
-                                info['task_id'],
-                                description=f"[red]❌ {img_name.capitalize()}: таймаут[/red]"
-                            )
-                    console.print("\n[red]❌ Таймаут при загрузке образов (более 10 минут)[/red]")
-                    return False
+                pull_process = subprocess.Popen(
+                    pull_cmd,
+                    stdout=None,  # Вывод напрямую в консоль
+                    stderr=subprocess.STDOUT
+                )
+                pull_return_code = pull_process.wait(timeout=600)
+            except subprocess.TimeoutExpired:
+                pull_process.kill()
+                console.print("\n[red]❌ Таймаут при загрузке образов (более 10 минут)[/red]")
+                return False
             
             if pull_return_code != 0:
                 console.print(f"\n[red]❌ Ошибка при загрузке образов (код: {pull_return_code})[/red]")
-                if pull_output:
-                    console.print(f"[yellow]Последние строки вывода:[/yellow]")
-                    for line in pull_output[-10:]:
-                        console.print(f"[dim]{line}[/dim]")
                 return False
             
-            console.print("[green]✓ Образы загружены[/green]\n")
+            console.print("\n[green]✓ Образы загружены[/green]\n")
             
-            # ЭТАП 2: Запуск контейнеров
+            # ЭТАП 2: Запуск контейнеров - используем встроенный вывод Docker Compose
             console.print("[cyan]🚀 Запуск контейнеров...[/cyan]\n")
             
             up_cmd = get_docker_compose_command()
@@ -317,76 +158,26 @@ def docker_compose_up(detach: bool = True, file: Optional[str] = None) -> bool:
                 up_cmd.extend(['-f', file])
             up_cmd.extend(['up', '-d'])
             
-            # Запускаем up с динамическим прогрессом
-            up_process = subprocess.Popen(
-                up_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            up_output = []
-            current_container = None
-            
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-                transient=False
-            ) as progress:
-                task = progress.add_task(
-                    "[cyan]Запуск контейнеров...[/cyan]",
-                    total=None
+            # Запускаем up с прямым выводом в консоль
+            try:
+                up_process = subprocess.Popen(
+                    up_cmd,
+                    stdout=None,  # Вывод напрямую в консоль
+                    stderr=subprocess.STDOUT
                 )
-                
-                try:
-                    for line in up_process.stdout:
-                        line = line.rstrip()
-                        if not line:
-                            continue
-                        
-                        up_output.append(line)
-                        line_lower = line.lower()
-                        
-                        # Определяем текущий контейнер
-                        if 'creating' in line_lower:
-                            match = re.search(r'creating[^\s]*\s+([^\s]+)', line_lower)
-                            if match:
-                                current_container = match.group(1)
-                                progress.update(task, description=f"[cyan]Создание {current_container}...[/cyan]")
-                        elif 'starting' in line_lower:
-                            if current_container:
-                                progress.update(task, description=f"[cyan]Запуск {current_container}...[/cyan]")
-                        elif 'started' in line_lower:
-                            if current_container:
-                                progress.update(task, description=f"[green]✓ {current_container} запущен[/green]")
-                                current_container = None
-                        elif 'error' in line_lower or 'failed' in line_lower:
-                            progress.update(task, description=f"[red]❌ Ошибка: {line[:50]}[/red]")
-                    
-                    up_return_code = up_process.wait(timeout=120)
-                    
-                    if up_return_code == 0:
-                        progress.update(task, description="[green]✓ Все контейнеры запущены[/green]")
-                except subprocess.TimeoutExpired:
-                    up_process.kill()
-                    progress.update(task, description="[red]❌ Таймаут при запуске[/red]")
-                    console.print("\n[red]❌ Таймаут при запуске контейнеров[/red]")
-                    return False
+                up_return_code = up_process.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                up_process.kill()
+                console.print("\n[red]❌ Таймаут при запуске контейнеров[/red]")
+                return False
             
             if up_return_code != 0:
                 console.print(f"\n[red]❌ Ошибка при запуске контейнеров (код: {up_return_code})[/red]")
-                if up_output:
-                    console.print(f"[yellow]Последние строки вывода:[/yellow]")
-                    for line in up_output[-10:]:
-                        console.print(f"[dim]{line}[/dim]")
                 console.print(f"\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
                 console.print(f"[dim]{' '.join(up_cmd)}[/dim]")
                 return False
             
-            console.print("[green]✓ Контейнеры запущены[/green]")
+            console.print("\n[green]✓ Контейнеры запущены[/green]")
             
             # Даем время контейнерам запуститься
             import time
