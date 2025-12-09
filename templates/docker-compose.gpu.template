@@ -2,13 +2,16 @@ services:
   n8n:
     image: n8nio/n8n:latest
     container_name: n8n
-    ports:
-      - "${N8N_PORT}:5678"
     environment:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:${N8N_PORT}/
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - VIRTUAL_HOST=${VIRTUAL_HOST_N8N:-}
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST_N8N:-}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+    ports:
+      - "${N8N_PORT}:5678"
     deploy:
       resources:
         limits:
@@ -19,6 +22,8 @@ services:
           cpus: '${N8N_CPU_LIMIT}'
     volumes:
       - n8n_data:/home/node/.n8n
+    networks:
+      - proxy
     restart: unless-stopped
     entrypoint: |
       sh -c "
@@ -37,12 +42,15 @@ services:
     image: langflowai/langflow:latest
     container_name: langflow
     user: "0"
-    ports:
-      - "${LANGFLOW_PORT}:7860"
     environment:
       - LANGFLOW_API_KEY=${LANGFLOW_API_KEY:-}
       - LANGFLOW_HOST=0.0.0.0
       - LANGFLOW_PORT=7860
+      - VIRTUAL_HOST=${VIRTUAL_HOST_LANGFLOW:-}
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST_LANGFLOW:-}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+    ports:
+      - "${LANGFLOW_PORT}:7860"
     deploy:
       resources:
         limits:
@@ -53,6 +61,8 @@ services:
           cpus: '${LANGFLOW_CPU_LIMIT}'
     volumes:
       - langflow_data:/app/data
+    networks:
+      - proxy
     restart: unless-stopped
     entrypoint: |
       sh -c "
@@ -70,14 +80,15 @@ services:
       start_period: 40s
 
   supabase-db:
-    image: supabase/postgres:15.1.0.117
+    image: ghcr.io/supabase/postgres:15.1.0.119
     container_name: supabase-db
-    ports:
-      - "${SUPABASE_PORT}:5432"
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=postgres
       - POSTGRES_HOST=/var/run/postgresql
       - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "${SUPABASE_PORT}:5432"
     deploy:
       resources:
         limits:
@@ -88,6 +99,8 @@ services:
           cpus: '${SUPABASE_CPU_LIMIT}'
     volumes:
       - supabase_data:/var/lib/postgresql/data
+    networks:
+      - proxy
     restart: unless-stopped
     entrypoint: |
       sh -c "
@@ -105,24 +118,63 @@ services:
       retries: 5
 
   supabase-studio:
-    image: supabase/studio:latest
+    image: ghcr.io/supabase/studio:20240513-d025e0f
     container_name: supabase-studio
-    ports:
-      - "3000:3000"
     environment:
-      - SUPABASE_URL=http://supabase-db:5432
+      - SUPABASE_URL=http://supabase-rest:3000
+      - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL:-http://localhost:3000}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - VIRTUAL_HOST=${VIRTUAL_HOST_SUPABASE:-}
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST_SUPABASE:-}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+    ports:
+      - "127.0.0.1:${SUPABASE_KB_PORT:-3000}:3000"
+    depends_on:
+      - supabase-rest
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  supabase-auth:
+    image: ghcr.io/supabase/gotrue:v2.162.0
+    container_name: supabase-auth
     depends_on:
       - supabase-db
+    environment:
+      - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - JWT_SECRET=${JWT_SECRET}
+      - ANON_KEY=${ANON_KEY}
+      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - LOG_LEVEL=info
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  supabase-rest:
+    image: ghcr.io/supabase/postgrest:v12.2.0
+    container_name: supabase-rest
+    depends_on:
+      - supabase-db
+    environment:
+      - PGRST_DB_URI=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - PGRST_DB_SCHEMAS=public,storage,graphql_public
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_SERVER_HOST=0.0.0.0
+    networks:
+      - proxy
     restart: unless-stopped
 
   ollama:
     image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
     container_name: ollama
-    ports:
-      - "${OLLAMA_PORT}:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
+      - VIRTUAL_HOST=${VIRTUAL_HOST_OLLAMA:-}
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST_OLLAMA:-}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+    ports:
+      - "${OLLAMA_PORT}:11434"
     deploy:
       resources:
         limits:
@@ -135,6 +187,8 @@ services:
               capabilities: [gpu]
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - proxy
     restart: unless-stopped
     entrypoint: |
       sh -c "
@@ -149,6 +203,37 @@ services:
       retries: 3
       start_period: 40s
 
+  nginx-proxy:
+    image: jwilder/nginx-proxy:latest
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - certs:/etc/nginx/certs
+      - vhost.d:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  nginx-proxy-letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion:latest
+    container_name: nginx-proxy-letsencrypt
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certs:/etc/nginx/certs
+      - vhost.d:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+    environment:
+      - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL:-}
+    networks:
+      - proxy
+    depends_on:
+      - nginx-proxy
+    restart: unless-stopped
+
 volumes:
   n8n_data:
     driver: local
@@ -158,4 +243,13 @@ volumes:
     driver: local
   ollama_data:
     driver: local
+  certs:
+    driver: local
+  vhost.d:
+    driver: local
+  html:
+    driver: local
 
+networks:
+  proxy:
+    driver: bridge

@@ -27,7 +27,8 @@ from installer.docker_manager import (
     get_docker_version, get_docker_compose_version, docker_compose_up
 )
 from installer.config_generator import generate_env_file, generate_docker_compose
-from installer.nginx_config import generate_nginx_configs
+# nginx-proxy автоматически настраивает маршрутизацию, ручная генерация конфигов не нужна
+# from installer.nginx_config import generate_nginx_configs
 from installer.utils import generate_secret_key, generate_password, ensure_dir
 
 console = Console()
@@ -666,10 +667,9 @@ def main():
         generate_docker_compose(full_config, hardware)
         console.print("[green]✓ docker-compose.yml создан[/green]")
         
-        # Генерируем Nginx конфиги если нужны
-        if routing_mode != 'none':
-            generate_nginx_configs(full_config)
-            console.print("[green]✓ Nginx конфиги созданы[/green]")
+        # nginx-proxy автоматически настраивает маршрутизацию через переменные VIRTUAL_HOST
+        if routing_mode == 'subdomain':
+            console.print("[green]✓ nginx-proxy настроен для автоматической маршрутизации[/green]")
         
         # 12. Запуск сервисов
         console.print("\n[cyan]🚀 Готово к запуску![/cyan]")

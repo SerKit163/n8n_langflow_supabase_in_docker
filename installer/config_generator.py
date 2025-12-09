@@ -22,9 +22,27 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         # Базовый шаблон если файла нет
         content = generate_base_env_template()
     
+    # Определяем протокол и URL для n8n в зависимости от режима маршрутизации
+    routing_mode = config.get('routing_mode', '')
+    n8n_protocol = 'http'
+    webhook_url = f"http://localhost:{config.get('n8n_port', 5678)}/"
+    supabase_public_url = f"http://localhost:{config.get('supabase_port', 8000)}"
+    
+    if routing_mode == 'subdomain':
+        n8n_domain = config.get('n8n_domain', '')
+        supabase_domain = config.get('supabase_domain', '')
+        letsencrypt_email = config.get('letsencrypt_email', '')
+        
+        if n8n_domain and letsencrypt_email:
+            n8n_protocol = 'https'
+            webhook_url = f"https://{n8n_domain}/"
+        
+        if supabase_domain and letsencrypt_email:
+            supabase_public_url = f"https://{supabase_domain}"
+    
     # Заменяем переменные
     replacements = {
-        'ROUTING_MODE': config.get('routing_mode', ''),
+        'ROUTING_MODE': routing_mode,
         'N8N_DOMAIN': config.get('n8n_domain', ''),
         'LANGFLOW_DOMAIN': config.get('langflow_domain', ''),
         'SUPABASE_DOMAIN': config.get('supabase_domain', ''),
@@ -38,6 +56,7 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'N8N_PORT': str(config.get('n8n_port', 5678)),
         'LANGFLOW_PORT': str(config.get('langflow_port', 7860)),
         'SUPABASE_PORT': str(config.get('supabase_port', 8000)),
+        'SUPABASE_KB_PORT': str(config.get('supabase_kb_port', 3000)),
         'OLLAMA_PORT': str(config.get('ollama_port', 11434)),
         'N8N_MEMORY_LIMIT': config.get('n8n_memory_limit', '2g'),
         'LANGFLOW_MEMORY_LIMIT': config.get('langflow_memory_limit', '2g'),
@@ -48,13 +67,24 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'SUPABASE_CPU_LIMIT': str(config.get('supabase_cpu_limit', 0.3)),
         'OLLAMA_CPU_LIMIT': str(config.get('ollama_cpu_limit', 1.0)),
         'LANGFLOW_API_KEY': config.get('langflow_api_key', ''),
-        # Примечание: LANGFLOW_API_KEY настраивается в самом Langflow после запуска
         'POSTGRES_PASSWORD': config.get('postgres_password', generate_password()),
         'SUPABASE_ADMIN_LOGIN': config.get('supabase_admin_login', 'admin'),
         'JWT_SECRET': config.get('jwt_secret', ''),
         'ANON_KEY': config.get('anon_key', ''),
         'SERVICE_ROLE_KEY': config.get('service_role_key', ''),
         'OLLAMA_ENABLED': 'true' if config.get('ollama_enabled', False) else 'false',
+        'N8N_PROTOCOL': n8n_protocol,
+        'WEBHOOK_URL': webhook_url,
+        'SUPABASE_PUBLIC_URL': supabase_public_url,
+        # Переменные для nginx-proxy
+        'VIRTUAL_HOST_N8N': config.get('n8n_domain', '') if routing_mode == 'subdomain' else '',
+        'LETSENCRYPT_HOST_N8N': config.get('n8n_domain', '') if routing_mode == 'subdomain' and config.get('letsencrypt_email') else '',
+        'VIRTUAL_HOST_LANGFLOW': config.get('langflow_domain', '') if routing_mode == 'subdomain' else '',
+        'LETSENCRYPT_HOST_LANGFLOW': config.get('langflow_domain', '') if routing_mode == 'subdomain' and config.get('letsencrypt_email') else '',
+        'VIRTUAL_HOST_SUPABASE': config.get('supabase_domain', '') if routing_mode == 'subdomain' else '',
+        'LETSENCRYPT_HOST_SUPABASE': config.get('supabase_domain', '') if routing_mode == 'subdomain' and config.get('letsencrypt_email') else '',
+        'VIRTUAL_HOST_OLLAMA': config.get('ollama_domain', '') if routing_mode == 'subdomain' and config.get('ollama_enabled') else '',
+        'LETSENCRYPT_HOST_OLLAMA': config.get('ollama_domain', '') if routing_mode == 'subdomain' and config.get('ollama_enabled') and config.get('letsencrypt_email') else '',
     }
     
     # Заменяем все переменные в шаблоне
