@@ -2,6 +2,7 @@
 Модуль генерации конфигурационных файлов
 """
 import os
+import subprocess
 from pathlib import Path
 from typing import Dict, Optional
 from installer.utils import (
@@ -240,6 +241,54 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
     write_file(output_path, content)
 
 
+def hash_password_for_caddy(password: str) -> str:
+    """
+    Генерирует bcrypt хеш пароля для Caddy basicauth
+    Использует команду caddy hash-password если доступна, иначе использует bcrypt
+    """
+    # Пытаемся использовать caddy hash-password (если Caddy установлен локально)
+    try:
+        result = subprocess.run(
+            ['caddy', 'hash-password', '--plaintext', password],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    
+    # Если caddy недоступен, используем bcrypt через Python
+    try:
+        import bcrypt
+        # Генерируем bcrypt хеш с cost factor 10 (стандарт для Caddy)
+        salt = bcrypt.gensalt(rounds=10)
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
+    except ImportError:
+        # Если bcrypt не установлен, генерируем хеш через Docker контейнер Caddy
+        # Это работает если Docker доступен
+        try:
+            result = subprocess.run(
+                ['docker', 'run', '--rm', 'caddy:latest', 'caddy', 'hash-password', '--plaintext', password],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        # Если ничего не работает, возвращаем пустую строку и выводим предупреждение
+        # Пользователю нужно будет вручную сгенерировать хеш
+        print(f"⚠️  Не удалось автоматически сгенерировать хеш пароля для Caddy basicauth.")
+        print(f"   Установите bcrypt: pip install bcrypt")
+        print(f"   Или используйте команду: docker run --rm caddy:latest caddy hash-password --plaintext '{password}'")
+        return ''
+
+
 def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     """
     Генерирует Caddyfile из конфигурации
@@ -276,6 +325,14 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
         supabase_domain = 'localhost'
         ollama_domain = 'localhost'
     
+    # Генерируем хеш пароля для Supabase Studio basicauth
+    supabase_admin_login = config.get('supabase_admin_login', 'admin')
+    supabase_admin_password = config.get('supabase_admin_password', '')
+    supabase_password_hash = ''
+    
+    if supabase_admin_password:
+        supabase_password_hash = hash_password_for_caddy(supabase_admin_password)
+    
     # Заменяем переменные
     replacements = {
         'CADDY_EMAIL': letsencrypt_email or 'admin@example.com',
@@ -283,6 +340,8 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
         'LANGFLOW_DOMAIN': langflow_domain,
         'SUPABASE_DOMAIN': supabase_domain,
         'OLLAMA_DOMAIN': ollama_domain if ollama_enabled else '',
+        'SUPABASE_ADMIN_LOGIN': supabase_admin_login,
+        'SUPABASE_ADMIN_PASSWORD_HASH': supabase_password_hash,
     }
     
     # Заменяем все переменные

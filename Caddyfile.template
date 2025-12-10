@@ -29,6 +29,9 @@
 
 # Supabase Studio
 {SUPABASE_DOMAIN} {
+    basicauth {
+        {SUPABASE_ADMIN_LOGIN} {SUPABASE_ADMIN_PASSWORD_HASH}
+    }
     reverse_proxy supabase-studio:3000 {
         header_up Host {host}
         header_up X-Real-IP {remote}
