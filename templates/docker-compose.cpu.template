@@ -42,6 +42,7 @@ services:
     # ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy.
     # ports:
     #   - "7860:7860"
+    user: "0"
     environment:
       - LANGFLOW_HOST=0.0.0.0
       - LANGFLOW_PORT=7860
@@ -51,7 +52,7 @@ services:
       sh -c "
         mkdir -p /app/data/.cache/langflow
         mkdir -p /app/data/logs
-        chown -R $(id -u):$(id -g) /app/data || true
+        chown -R 1000:1000 /app/data || true
         chmod -R 755 /app/data || true
         exec langflow run --host 0.0.0.0 --port 7860
       "
