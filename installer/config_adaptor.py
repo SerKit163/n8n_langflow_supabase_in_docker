@@ -26,7 +26,8 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
             'n8n': max(0.25, min(0.5, cpu_cores * 0.1)),
             'langflow': max(0.25, min(0.5, cpu_cores * 0.1)),
             'supabase': max(0.2, min(0.3, cpu_cores * 0.05)),
-            'ollama': min(1.0, cpu_cores * 0.5) if has_gpu else 0
+            # Ollama: для GPU версии больше CPU, для CPU версии меньше
+            'ollama': min(1.0, cpu_cores * 0.5) if has_gpu else min(0.5, cpu_cores * 0.3)
         },
         'memory_limits': {
             'n8n': calculate_memory_limit(total_ram, 0.2, min_val=1, max_val=4),
@@ -35,7 +36,8 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
             # Для 8GB RAM это даст 3.2GB
             'langflow': calculate_memory_limit(total_ram, 0.4, min_val=3, max_val=8),
             'supabase': calculate_memory_limit(total_ram, 0.1, min_val=0.5, max_val=2),
-            'ollama': calculate_memory_limit(total_ram, 0.4, min_val=2, max_val=8) if has_gpu else 0
+            # Ollama: для GPU версии больше памяти, для CPU версии минимум 2GB
+            'ollama': calculate_memory_limit(total_ram, 0.4, min_val=2, max_val=8) if has_gpu else calculate_memory_limit(total_ram, 0.3, min_val=2, max_val=4)
         },
         'use_gpu': has_gpu,
         'ollama_recommended': has_gpu and total_ram >= 8,

@@ -213,6 +213,53 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         write_file(output_path, content)
         return
     
+    # Если Ollama включен, добавляем его в CPU шаблон
+    if template_name == "docker-compose.cpu.template" and ollama_enabled:
+        # Проверяем, есть ли уже секция ollama
+        if '  ollama:' not in content:
+            import re
+            # Находим место перед caddy для вставки ollama
+            ollama_service = f"""  ollama:
+    image: ${{OLLAMA_IMAGE:-ollama/ollama:latest}}
+    container_name: ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy.
+    # ports:
+    #   - "${{OLLAMA_PORT}}:11434"
+    deploy:
+      resources:
+        limits:
+          memory: ${{OLLAMA_MEMORY_LIMIT}}
+          cpus: '${{OLLAMA_CPU_LIMIT}}'
+        reservations:
+          memory: ${{OLLAMA_MEMORY_LIMIT}}
+          cpus: '${{OLLAMA_CPU_LIMIT}}'
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - proxy
+    restart: unless-stopped
+    entrypoint: |
+      sh -c "
+        mkdir -p /root/.ollama
+        chmod -R 755 /root/.ollama || true
+        exec /bin/ollama serve
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+"""
+            # Вставляем перед caddy
+            content = re.sub(r'(\n  caddy:)', r'\n' + ollama_service + r'\1', content)
+            # Добавляем ollama_data в volumes если его нет
+            if '  ollama_data:' not in content:
+                content = re.sub(r'(  caddy_config:\s*driver: local\n)', r'\1  ollama_data:\n    driver: local\n', content)
+    
     # Если Ollama не включен, удаляем его из GPU шаблона
     if template_name == "docker-compose.gpu.template" and not ollama_enabled:
         # Удаляем секцию ollama

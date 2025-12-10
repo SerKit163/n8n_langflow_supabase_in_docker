@@ -72,7 +72,18 @@ def configure_ollama(hardware, existing_config):
         ollama_image = "ollama/ollama:latest"
     
     # Получаем рекомендуемые настройки
-    recommended_config = adapt_config_for_hardware(hardware)
+    # Временно включаем ollama для правильного расчета ресурсов
+    hardware_temp = hardware.copy()
+    hardware_temp['gpu'] = hardware['gpu'].copy()
+    hardware_temp['gpu']['available'] = has_gpu  # Устанавливаем доступность GPU
+    recommended_config = adapt_config_for_hardware(hardware_temp)
+    
+    # Если память для Ollama равна 0, устанавливаем минимум
+    if recommended_config['memory_limits']['ollama'] == 0:
+        total_ram = hardware['ram']['total_gb']
+        # Для CPU версии используем 30% от RAM, минимум 2GB, максимум 4GB
+        recommended_config['memory_limits']['ollama'] = max(2.0, min(total_ram * 0.3, 4.0))
+        recommended_config['cpu_limits']['ollama'] = min(0.5, hardware['cpu']['cores'] * 0.3)
     
     # Режим маршрутизации
     routing_mode = existing_config.get('ROUTING_MODE', '')
