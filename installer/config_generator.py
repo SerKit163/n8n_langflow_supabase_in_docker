@@ -214,6 +214,11 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         return
     
     # Если Ollama включен, добавляем его в CPU шаблон
+    # ВАЖНО: проверяем что ollama_enabled явно True, а не просто присутствует в config
+    ollama_enabled = config.get('ollama_enabled', False)
+    if isinstance(ollama_enabled, str):
+        ollama_enabled = ollama_enabled.lower() in ('true', '1', 'yes', 'on')
+    
     if template_name == "docker-compose.cpu.template" and ollama_enabled:
         # Проверяем, есть ли уже секция ollama
         if '  ollama:' not in content:

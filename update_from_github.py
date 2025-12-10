@@ -244,8 +244,18 @@ def convert_env_to_config(env_config):
     config['anon_key'] = env_config.get('ANON_KEY', '')
     config['service_role_key'] = env_config.get('SERVICE_ROLE_KEY', '')
     
-    # Ollama
-    config['ollama_enabled'] = env_config.get('OLLAMA_ENABLED', 'false').lower() == 'true'
+    # Ollama - только если явно включен в .env
+    ollama_enabled_str = env_config.get('OLLAMA_ENABLED', '').strip().lower()
+    config['ollama_enabled'] = ollama_enabled_str == 'true'
+    
+    # Если Ollama не включен, не добавляем его настройки
+    if not config['ollama_enabled']:
+        # Очищаем настройки Ollama, чтобы они не попали в конфигурацию
+        config.pop('ollama_domain', None)
+        config.pop('ollama_path', None)
+        config.pop('ollama_port', None)
+        config.pop('ollama_memory_limit', None)
+        config.pop('ollama_cpu_limit', None)
     
     return config
 
