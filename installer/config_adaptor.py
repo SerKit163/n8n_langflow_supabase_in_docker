@@ -30,7 +30,10 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
         },
         'memory_limits': {
             'n8n': calculate_memory_limit(total_ram, 0.2, min_val=1, max_val=4),
-            'langflow': calculate_memory_limit(total_ram, 0.35, min_val=3, max_val=8),
+            # Langflow: минимум 3GB, оптимально 40% от RAM, максимум 8GB
+            # Для 6GB RAM это даст 2.4GB, но минимум 3GB, так что будет 3GB
+            # Для 8GB RAM это даст 3.2GB
+            'langflow': calculate_memory_limit(total_ram, 0.4, min_val=3, max_val=8),
             'supabase': calculate_memory_limit(total_ram, 0.1, min_val=0.5, max_val=2),
             'ollama': calculate_memory_limit(total_ram, 0.4, min_val=2, max_val=8) if has_gpu else 0
         },
