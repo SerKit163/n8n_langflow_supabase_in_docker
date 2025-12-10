@@ -53,6 +53,8 @@ services:
       - LANGFLOW_WORKERS=1
       - LANGFLOW_WORKER_TIMEOUT=300
       - LANGFLOW_COMPONENTS_PATH=/app/.venv/lib/python3.12/site-packages/langflow/components
+      - LANGFLOW_LOAD_FLOWS_ON_STARTUP=false
+      - LANGFLOW_AUTO_LOGIN=false
     entrypoint: |
       /bin/sh -c "
         # Проверяем, что мы root
