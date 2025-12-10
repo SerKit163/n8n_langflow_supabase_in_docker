@@ -47,6 +47,14 @@ services:
       - LANGFLOW_PORT=7860
       - LANGFLOW_CACHE_TYPE=memory
       - LANGFLOW_LANGCHAIN_CACHE=memory
+    entrypoint: |
+      sh -c "
+        mkdir -p /app/data/.cache/langflow
+        mkdir -p /app/data/logs
+        chown -R $(id -u):$(id -g) /app/data || true
+        chmod -R 755 /app/data || true
+        exec langflow run --host 0.0.0.0 --port 7860
+      "
     deploy:
       resources:
         limits:
