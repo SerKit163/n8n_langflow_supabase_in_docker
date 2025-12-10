@@ -175,7 +175,7 @@ def select_routing_mode() -> str:
     return options[choice]
 
 
-def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict:
+def configure_domains(routing_mode: str, ollama_available: bool = False, services_selection: dict = None) -> dict:
     """Настройка доменов"""
     domains_config = {}
     
@@ -206,17 +206,21 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
                     console.print(f"[red]❌ {error}[/red]")
                     continue
                 
-                # Автоматически формируем поддомены для основных сервисов
-                generated_domains = {
-                    'n8n_domain': f"n8n.{base_domain}",
-                    'langflow_domain': f"langflow.{base_domain}",
-                    'supabase_domain': f"supabase.{base_domain}"
-                }
+                # Автоматически формируем поддомены только для выбранных сервисов
+                generated_domains = {}
+                if services_selection and services_selection.get('n8n_enabled', True):
+                    generated_domains['n8n_domain'] = f"n8n.{base_domain}"
+                if services_selection and services_selection.get('langflow_enabled', True):
+                    generated_domains['langflow_domain'] = f"langflow.{base_domain}"
+                # Supabase всегда включен
+                generated_domains['supabase_domain'] = f"supabase.{base_domain}"
                 
                 # Показываем сформированные поддомены
                 console.print("\n[green]✓ Сформированные поддомены:[/green]")
-                console.print(f"  N8N: [cyan]{generated_domains['n8n_domain']}[/cyan]")
-                console.print(f"  Langflow: [cyan]{generated_domains['langflow_domain']}[/cyan]")
+                if 'n8n_domain' in generated_domains:
+                    console.print(f"  N8N: [cyan]{generated_domains['n8n_domain']}[/cyan]")
+                if 'langflow_domain' in generated_domains:
+                    console.print(f"  Langflow: [cyan]{generated_domains['langflow_domain']}[/cyan]")
                 console.print(f"  Supabase: [cyan]{generated_domains['supabase_domain']}[/cyan]")
                 
                 # Подтверждение основных доменов
@@ -245,28 +249,32 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
             # РУЧНОЙ РЕЖИМ (как было раньше)
             console.print("\n[yellow]💡[/yellow] Домены (введите '-' для пропуска, система будет работать по IP/localhost):\n")
             
-            while True:
-                n8n_domain = Prompt.ask("Домен N8N (пример: n8n.site.ru) или '-'", default="-")
-                if n8n_domain == '-':
-                    break
-                is_valid, error = validate_domain(n8n_domain)
-                if is_valid:
-                    domains_config['n8n_domain'] = n8n_domain
-                    break
-                else:
-                    console.print(f"[red]❌ {error}[/red]")
+            # Спрашиваем домены только для выбранных сервисов
+            if services_selection and services_selection.get('n8n_enabled', True):
+                while True:
+                    n8n_domain = Prompt.ask("Домен N8N (пример: n8n.site.ru) или '-'", default="-")
+                    if n8n_domain == '-':
+                        break
+                    is_valid, error = validate_domain(n8n_domain)
+                    if is_valid:
+                        domains_config['n8n_domain'] = n8n_domain
+                        break
+                    else:
+                        console.print(f"[red]❌ {error}[/red]")
             
-            while True:
-                langflow_domain = Prompt.ask("Домен Langflow (пример: langflow.site.ru) или '-'", default="-")
-                if langflow_domain == '-':
-                    break
-                is_valid, error = validate_domain(langflow_domain)
-                if is_valid:
-                    domains_config['langflow_domain'] = langflow_domain
-                    break
-                else:
-                    console.print(f"[red]❌ {error}[/red]")
+            if services_selection and services_selection.get('langflow_enabled', True):
+                while True:
+                    langflow_domain = Prompt.ask("Домен Langflow (пример: langflow.site.ru) или '-'", default="-")
+                    if langflow_domain == '-':
+                        break
+                    is_valid, error = validate_domain(langflow_domain)
+                    if is_valid:
+                        domains_config['langflow_domain'] = langflow_domain
+                        break
+                    else:
+                        console.print(f"[red]❌ {error}[/red]")
             
+            # Supabase всегда включен
             while True:
                 supabase_domain = Prompt.ask("Домен Supabase (пример: supabase.site.ru) или '-'", default="-")
                 if supabase_domain == '-':
@@ -330,19 +338,23 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
                     console.print(f"[red]❌ {error}[/red]")
                     continue
                 
-                # Автоматически формируем пути для основных сервисов
+                # Автоматически формируем пути только для выбранных сервисов
                 generated_paths = {
                     'base_domain': base_domain,
-                    'n8n_path': '/n8n',
-                    'langflow_path': '/langflow',
-                    'supabase_path': '/supabase'
+                    'supabase_path': '/supabase'  # Supabase всегда включен
                 }
+                if services_selection and services_selection.get('n8n_enabled', True):
+                    generated_paths['n8n_path'] = '/n8n'
+                if services_selection and services_selection.get('langflow_enabled', True):
+                    generated_paths['langflow_path'] = '/langflow'
                 
                 # Показываем сформированные пути
                 console.print("\n[green]✓ Сформированные пути:[/green]")
                 console.print(f"  Базовый домен: [cyan]{base_domain}[/cyan]")
-                console.print(f"  N8N: [cyan]{base_domain}{generated_paths['n8n_path']}[/cyan]")
-                console.print(f"  Langflow: [cyan]{base_domain}{generated_paths['langflow_path']}[/cyan]")
+                if 'n8n_path' in generated_paths:
+                    console.print(f"  N8N: [cyan]{base_domain}{generated_paths['n8n_path']}[/cyan]")
+                if 'langflow_path' in generated_paths:
+                    console.print(f"  Langflow: [cyan]{base_domain}{generated_paths['langflow_path']}[/cyan]")
                 console.print(f"  Supabase: [cyan]{base_domain}{generated_paths['supabase_path']}[/cyan]")
                 
                 # Подтверждение основных путей
@@ -378,8 +390,11 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
                     console.print(f"[red]❌ {error}[/red]")
             
             if base_domain != '-':
-                domains_config['n8n_path'] = Prompt.ask("Путь для N8N", default="/n8n")
-                domains_config['langflow_path'] = Prompt.ask("Путь для Langflow", default="/langflow")
+                if services_selection and services_selection.get('n8n_enabled', True):
+                    domains_config['n8n_path'] = Prompt.ask("Путь для N8N", default="/n8n")
+                if services_selection and services_selection.get('langflow_enabled', True):
+                    domains_config['langflow_path'] = Prompt.ask("Путь для Langflow", default="/langflow")
+                # Supabase всегда включен
                 domains_config['supabase_path'] = Prompt.ask("Путь для Supabase", default="/supabase")
                 
                 if ollama_available:
@@ -403,11 +418,56 @@ def configure_domains(routing_mode: str, ollama_available: bool = False) -> dict
     return domains_config
 
 
-def configure_services(recommended_config: dict, hardware: dict) -> dict:
+def select_services() -> dict:
+    """Выбор сервисов для установки"""
+    console.print("\n[cyan]📦 Выбор сервисов для установки[/cyan]")
+    console.print("\n[yellow]💡 Supabase обязателен (содержит базу данных PostgreSQL)[/yellow]")
+    
+    services_selection = {
+        'n8n_enabled': False,
+        'langflow_enabled': False,
+        'supabase_enabled': True,  # Всегда включен
+        'ollama_enabled': False
+    }
+    
+    # Выбор n8n
+    services_selection['n8n_enabled'] = Confirm.ask(
+        "\n[cyan]Установить N8N?[/cyan] (автоматизация рабочих процессов)",
+        default=True
+    )
+    
+    # Выбор Langflow
+    services_selection['langflow_enabled'] = Confirm.ask(
+        "[cyan]Установить Langflow?[/cyan] (визуальный конструктор ИИ агентов)",
+        default=True
+    )
+    
+    # Проверка что хотя бы один опциональный сервис выбран
+    if not services_selection['n8n_enabled'] and not services_selection['langflow_enabled']:
+        console.print("\n[red]❌ Ошибка: Должен быть выбран хотя бы один сервис (n8n или langflow)![/red]")
+        console.print("[yellow]💡 Supabase обязателен, но он только база данных[/yellow]")
+        if not Confirm.ask("Выбрать n8n и langflow по умолчанию?", default=True):
+            sys.exit(1)
+        services_selection['n8n_enabled'] = True
+        services_selection['langflow_enabled'] = True
+    
+    # Показываем выбранные сервисы
+    console.print("\n[green]✓ Выбранные сервисы:[/green]")
+    if services_selection['n8n_enabled']:
+        console.print("  • N8N")
+    if services_selection['langflow_enabled']:
+        console.print("  • Langflow")
+    console.print("  • Supabase (обязательно)")
+    
+    return services_selection
+
+
+def configure_services(recommended_config: dict, hardware: dict, services_selection: dict) -> dict:
     """Настройка сервисов"""
     console.print("\n[cyan]⚙️ Настройка сервисов[/cyan]")
     
     services_config = {}
+    services_config.update(services_selection)  # Добавляем информацию о выбранных сервисах
     
     # Использовать рекомендуемые настройки?
     use_recommended = Confirm.ask(
@@ -416,53 +476,57 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     )
     
     if use_recommended:
-        services_config = {
-            'n8n_memory_limit': f"{recommended_config['memory_limits']['n8n']:.1f}g",
-            'n8n_cpu_limit': recommended_config['cpu_limits']['n8n'],
-            'langflow_memory_limit': f"{recommended_config['memory_limits']['langflow']:.1f}g",
-            'langflow_cpu_limit': recommended_config['cpu_limits']['langflow'],
-            'supabase_memory_limit': f"{recommended_config['memory_limits']['supabase']:.1f}g",
-            'supabase_cpu_limit': recommended_config['cpu_limits']['supabase'],
-        }
+        if services_selection.get('n8n_enabled', True):
+            services_config['n8n_memory_limit'] = f"{recommended_config['memory_limits']['n8n']:.1f}g"
+            services_config['n8n_cpu_limit'] = recommended_config['cpu_limits']['n8n']
+        if services_selection.get('langflow_enabled', True):
+            services_config['langflow_memory_limit'] = f"{recommended_config['memory_limits']['langflow']:.1f}g"
+            services_config['langflow_cpu_limit'] = recommended_config['cpu_limits']['langflow']
+        # Supabase всегда включен
+        services_config['supabase_memory_limit'] = f"{recommended_config['memory_limits']['supabase']:.1f}g"
+        services_config['supabase_cpu_limit'] = recommended_config['cpu_limits']['supabase']
     else:
-        # Ручная настройка
-        console.print("\n[yellow]N8N:[/yellow]")
-        services_config['n8n_memory_limit'] = Prompt.ask(
-            "Лимит памяти (например, 2g)",
-            default=f"{recommended_config['memory_limits']['n8n']:.1f}g"
-        )
-        services_config['n8n_cpu_limit'] = float(Prompt.ask(
-            "Лимит CPU",
-            default=str(recommended_config['cpu_limits']['n8n'])
-        ))
-        
-        console.print("\n[yellow]Langflow:[/yellow]")
-        console.print(
-            "[red]⚠️  ВНИМАНИЕ: Langflow требует много памяти для работы с ИИ агентами![/red]\n"
-            "[yellow]Рекомендации:[/yellow]\n"
-            "  • Минимум: 3GB для базовой работы\n"
-            "  • Оптимально: 4-6GB для создания ИИ агентов\n"
-            "  • При сложных агентах: может потребоваться до 8GB\n"
-            f"  • У вас доступно: {hardware['ram']['total_gb']}GB RAM\n"
-        )
-        services_config['langflow_memory_limit'] = Prompt.ask(
-            "Лимит памяти для Langflow",
-            default=f"{recommended_config['memory_limits']['langflow']:.1f}g"
-        )
-        
-        # Предупреждение если лимит слишком мал
-        langflow_limit_gb = float(services_config['langflow_memory_limit'].replace('g', ''))
-        if langflow_limit_gb < 3:
-            console.print(
-                "[yellow]⚠️  Предупреждение: Лимит меньше 3GB может быть недостаточным "
-                "для работы с ИИ агентами![/yellow]"
+        # Ручная настройка только для выбранных сервисов
+        if services_selection.get('n8n_enabled', True):
+            console.print("\n[yellow]N8N:[/yellow]")
+            services_config['n8n_memory_limit'] = Prompt.ask(
+                "Лимит памяти (например, 2g)",
+                default=f"{recommended_config['memory_limits']['n8n']:.1f}g"
             )
+            services_config['n8n_cpu_limit'] = float(Prompt.ask(
+                "Лимит CPU",
+                default=str(recommended_config['cpu_limits']['n8n'])
+            ))
         
-        services_config['langflow_cpu_limit'] = float(Prompt.ask(
-            "Лимит CPU",
-            default=str(recommended_config['cpu_limits']['langflow'])
-        ))
+        if services_selection.get('langflow_enabled', True):
+            console.print("\n[yellow]Langflow:[/yellow]")
+            console.print(
+                "[red]⚠️  ВНИМАНИЕ: Langflow требует много памяти для работы с ИИ агентами![/red]\n"
+                "[yellow]Рекомендации:[/yellow]\n"
+                "  • Минимум: 3GB для базовой работы\n"
+                "  • Оптимально: 4-6GB для создания ИИ агентов\n"
+                "  • При сложных агентах: может потребоваться до 8GB\n"
+                f"  • У вас доступно: {hardware['ram']['total_gb']}GB RAM\n"
+            )
+            services_config['langflow_memory_limit'] = Prompt.ask(
+                "Лимит памяти для Langflow",
+                default=f"{recommended_config['memory_limits']['langflow']:.1f}g"
+            )
+            
+            # Предупреждение если лимит слишком мал
+            langflow_limit_gb = float(services_config['langflow_memory_limit'].replace('g', ''))
+            if langflow_limit_gb < 3:
+                console.print(
+                    "[yellow]⚠️  Предупреждение: Лимит меньше 3GB может быть недостаточным "
+                    "для работы с ИИ агентами![/yellow]"
+                )
+            
+            services_config['langflow_cpu_limit'] = float(Prompt.ask(
+                "Лимит CPU",
+                default=str(recommended_config['cpu_limits']['langflow'])
+            ))
         
+        # Supabase всегда включен
         console.print("\n[yellow]Supabase:[/yellow]")
         services_config['supabase_memory_limit'] = Prompt.ask(
             "Лимит памяти",
@@ -477,8 +541,11 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     console.print("\n[cyan]🔌 Настройка портов:[/cyan]")
     console.print("[yellow]💡[/yellow] Нажмите Enter для продолжения с портом по умолчанию или введите свой порт\n")
     
-    services_config['n8n_port'] = IntPrompt.ask("Порт для N8N (5678)", default=5678)
-    services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow (7860)", default=7860)
+    if services_selection.get('n8n_enabled', True):
+        services_config['n8n_port'] = IntPrompt.ask("Порт для N8N (5678)", default=5678)
+    if services_selection.get('langflow_enabled', True):
+        services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow (7860)", default=7860)
+    # Supabase всегда включен
     services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase (8000)", default=8000)
     
     # Ollama
@@ -668,18 +735,25 @@ def main():
             if not Confirm.ask("\nПродолжить установку?", default=False):
                 sys.exit(1)
         
-        # 6. Выбор режима маршрутизации
+        # 6. Выбор сервисов для установки
+        services_selection = select_services()
+        
+        # 7. Выбор режима маршрутизации
         routing_mode = select_routing_mode()
         
-        # 7. Настройка доменов
+        # 8. Настройка доменов
         domains_config = {}
         if routing_mode != 'none':
             # Проверяем, доступен ли Ollama (на основе железа)
             ollama_available = recommended_config.get('ollama_recommended', False) or recommended_config.get('use_gpu', False)
-            domains_config = configure_domains(routing_mode, ollama_available=ollama_available)
+            domains_config = configure_domains(
+                routing_mode, 
+                ollama_available=ollama_available,
+                services_selection=services_selection
+            )
         
-        # 8. Настройка сервисов
-        services_config = configure_services(recommended_config, hardware)
+        # 9. Настройка сервисов
+        services_config = configure_services(recommended_config, hardware, services_selection)
         
         # 9. Настройка Supabase (пароль, ключи)
         supabase_config = configure_supabase()
@@ -749,9 +823,9 @@ def main():
                 
                 if routing_mode == 'subdomain':
                     # Режим поддоменов
-                    if full_config.get('n8n_domain'):
+                    if full_config.get('n8n_enabled', True) and full_config.get('n8n_domain'):
                         console.print(f"  [green]✓[/green] N8N: {protocol}://{full_config['n8n_domain']}")
-                    if full_config.get('langflow_domain'):
+                    if full_config.get('langflow_enabled', True) and full_config.get('langflow_domain'):
                         console.print(f"  [green]✓[/green] Langflow: {protocol}://{full_config['langflow_domain']}")
                     if full_config.get('supabase_domain'):
                         console.print(f"  [green]✓[/green] Supabase Studio: {protocol}://{full_config['supabase_domain']}")
@@ -765,8 +839,10 @@ def main():
                     # Режим путей
                     if full_config.get('base_domain'):
                         base_url = f"{protocol}://{full_config['base_domain']}"
-                        console.print(f"  [green]✓[/green] N8N: {base_url}{full_config.get('n8n_path', '/n8n')}")
-                        console.print(f"  [green]✓[/green] Langflow: {base_url}{full_config.get('langflow_path', '/langflow')}")
+                        if full_config.get('n8n_enabled', True):
+                            console.print(f"  [green]✓[/green] N8N: {base_url}{full_config.get('n8n_path', '/n8n')}")
+                        if full_config.get('langflow_enabled', True):
+                            console.print(f"  [green]✓[/green] Langflow: {base_url}{full_config.get('langflow_path', '/langflow')}")
                         console.print(f"  [green]✓[/green] Supabase Studio: {base_url}{full_config.get('supabase_path', '/supabase')}")
                         if full_config.get('supabase_admin_login'):
                             console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")
@@ -776,8 +852,10 @@ def main():
                             console.print(f"  [green]✓[/green] Ollama: {base_url}{full_config.get('ollama_path', '/ollama')}")
                 else:
                     # Режим портов (localhost)
-                    console.print(f"  [green]✓[/green] N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
-                    console.print(f"  [green]✓[/green] Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
+                    if full_config.get('n8n_enabled', True):
+                        console.print(f"  [green]✓[/green] N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
+                    if full_config.get('langflow_enabled', True):
+                        console.print(f"  [green]✓[/green] Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
                     console.print(f"  [green]✓[/green] Supabase Studio: http://localhost:{full_config.get('supabase_kb_port', 3000)}")
                     if full_config.get('supabase_admin_login'):
                         console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")

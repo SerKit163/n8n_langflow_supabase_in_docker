@@ -46,9 +46,16 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         if supabase_domain and letsencrypt_email:
             supabase_public_url = f"https://{supabase_domain}"
     
+    # Проверяем какие сервисы включены
+    n8n_enabled = config.get('n8n_enabled', True)
+    langflow_enabled = config.get('langflow_enabled', True)
+    # Supabase всегда включен
+    
     # Заменяем переменные
     replacements = {
         'ROUTING_MODE': routing_mode,
+        'N8N_ENABLED': 'true' if n8n_enabled else 'false',
+        'LANGFLOW_ENABLED': 'true' if langflow_enabled else 'false',
         'N8N_DOMAIN': n8n_domain,
         'LANGFLOW_DOMAIN': langflow_domain,
         'SUPABASE_DOMAIN': supabase_domain,
@@ -135,6 +142,7 @@ SSL_ENABLED=true
 # ============================================
 # N8N
 # ============================================
+N8N_ENABLED={N8N_ENABLED}
 N8N_VERSION=latest
 N8N_PORT={N8N_PORT}
 N8N_PROTOCOL={N8N_PROTOCOL}
@@ -149,6 +157,7 @@ LETSENCRYPT_HOST_N8N={LETSENCRYPT_HOST_N8N}
 # ============================================
 # LANGFLOW
 # ============================================
+LANGFLOW_ENABLED={LANGFLOW_ENABLED}
 LANGFLOW_VERSION=latest
 LANGFLOW_PORT={LANGFLOW_PORT}
 LANGFLOW_MEMORY_LIMIT={LANGFLOW_MEMORY_LIMIT}
@@ -264,9 +273,30 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
             if '  ollama_data:' not in content:
                 content = re.sub(r'(  caddy_config:\s*driver: local\n)', r'\1  ollama_data:\n    driver: local\n', content)
     
+    # Проверяем какие сервисы включены
+    n8n_enabled = config.get('n8n_enabled', True)
+    langflow_enabled = config.get('langflow_enabled', True)
+    # Supabase всегда включен
+    
+    import re
+    
+    # Удаляем невыбранные сервисы
+    if not n8n_enabled:
+        # Удаляем секцию n8n
+        n8n_pattern = r'  n8n:.*?(?=\n  [a-z]|\nvolumes:|\Z)'
+        content = re.sub(n8n_pattern, '', content, flags=re.DOTALL)
+        # Удаляем n8n_data из volumes
+        content = re.sub(r'  n8n_data:\s*driver: local\n', '', content)
+    
+    if not langflow_enabled:
+        # Удаляем секцию langflow
+        langflow_pattern = r'  langflow:.*?(?=\n  [a-z]|\nvolumes:|\Z)'
+        content = re.sub(langflow_pattern, '', content, flags=re.DOTALL)
+        # Удаляем langflow_data из volumes
+        content = re.sub(r'  langflow_data:\s*driver: local\n', '', content)
+    
     # Если Ollama не включен, удаляем его из шаблона (CPU или GPU)
     if not ollama_enabled:
-        import re
         # Удаляем секцию ollama
         ollama_pattern = r'  ollama:.*?(?=\n  [a-z]|\nvolumes:|\Z)'
         content = re.sub(ollama_pattern, '', content, flags=re.DOTALL)
@@ -356,12 +386,17 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     routing_mode = config.get('routing_mode', '')
     letsencrypt_email = config.get('letsencrypt_email', '') or ''
     
+    # Проверяем какие сервисы включены
+    n8n_enabled = config.get('n8n_enabled', True)
+    langflow_enabled = config.get('langflow_enabled', True)
+    ollama_enabled = config.get('ollama_enabled', False)
+    # Supabase всегда включен
+    
     # Получаем домены
     n8n_domain = config.get('n8n_domain', '') or 'localhost'
     langflow_domain = config.get('langflow_domain', '') or 'localhost'
     supabase_domain = config.get('supabase_domain', '') or 'localhost'
     ollama_domain = config.get('ollama_domain', '') or 'localhost'
-    ollama_enabled = config.get('ollama_enabled', False)
     
     # Если режим поддоменов, используем домены, иначе localhost
     if routing_mode == 'subdomain':
@@ -409,10 +444,22 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     for key, value in replacements.items():
         content = content.replace(f'{{{key}}}', str(value))
     
+    import re
+    
+    # Удаляем секции для невыбранных сервисов
+    if not n8n_enabled:
+        # Удаляем блок n8n (от # N8N до следующего блока или конца)
+        n8n_pattern = r'# N8N.*?(?=\n# [A-Z]|\n\n\n|\Z)'
+        content = re.sub(n8n_pattern, '', content, flags=re.DOTALL)
+    
+    if not langflow_enabled:
+        # Удаляем блок langflow (от # Langflow до следующего блока или конца)
+        langflow_pattern = r'# Langflow.*?(?=\n# [A-Z]|\n\n\n|\Z)'
+        content = re.sub(langflow_pattern, '', content, flags=re.DOTALL)
+    
     # Удаляем секцию Ollama если она не включена
     if not ollama_enabled:
-        import re
-        ollama_pattern = r'# Ollama.*?\n\n'
+        ollama_pattern = r'# Ollama.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(ollama_pattern, '', content, flags=re.DOTALL)
     
     write_file(output_path, content)

@@ -244,11 +244,35 @@ def convert_env_to_config(env_config):
     config['anon_key'] = env_config.get('ANON_KEY', '')
     config['service_role_key'] = env_config.get('SERVICE_ROLE_KEY', '')
     
+    # Сервисы - проверяем какие включены (по умолчанию все включены для обратной совместимости)
+    n8n_enabled_str = env_config.get('N8N_ENABLED', 'true').strip().lower()
+    config['n8n_enabled'] = n8n_enabled_str != 'false'
+    
+    langflow_enabled_str = env_config.get('LANGFLOW_ENABLED', 'true').strip().lower()
+    config['langflow_enabled'] = langflow_enabled_str != 'false'
+    
+    # Supabase всегда включен
+    config['supabase_enabled'] = True
+    
     # Ollama - только если явно включен в .env
     ollama_enabled_str = env_config.get('OLLAMA_ENABLED', '').strip().lower()
     config['ollama_enabled'] = ollama_enabled_str == 'true'
     
-    # Если Ollama не включен, не добавляем его настройки
+    # Если сервисы не включены, не добавляем их настройки
+    if not config['n8n_enabled']:
+        config.pop('n8n_domain', None)
+        config.pop('n8n_path', None)
+        config.pop('n8n_port', None)
+        config.pop('n8n_memory_limit', None)
+        config.pop('n8n_cpu_limit', None)
+    
+    if not config['langflow_enabled']:
+        config.pop('langflow_domain', None)
+        config.pop('langflow_path', None)
+        config.pop('langflow_port', None)
+        config.pop('langflow_memory_limit', None)
+        config.pop('langflow_cpu_limit', None)
+    
     if not config['ollama_enabled']:
         # Очищаем настройки Ollama, чтобы они не попали в конфигурацию
         config.pop('ollama_domain', None)
