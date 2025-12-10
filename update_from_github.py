@@ -240,6 +240,7 @@ def convert_env_to_config(env_config):
     config['postgres_password'] = env_config.get('POSTGRES_PASSWORD', '')
     config['supabase_admin_login'] = env_config.get('SUPABASE_ADMIN_LOGIN', 'admin')
     config['supabase_admin_password'] = env_config.get('SUPABASE_ADMIN_PASSWORD', '')
+    config['supabase_admin_password_hash'] = env_config.get('SUPABASE_ADMIN_PASSWORD_HASH', '')
     config['jwt_secret'] = env_config.get('JWT_SECRET', '')
     config['anon_key'] = env_config.get('ANON_KEY', '')
     config['service_role_key'] = env_config.get('SERVICE_ROLE_KEY', '')
