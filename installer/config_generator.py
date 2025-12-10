@@ -71,12 +71,10 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'LANGFLOW_CPU_LIMIT': str(config.get('langflow_cpu_limit', 0.5)),
         'SUPABASE_CPU_LIMIT': str(config.get('supabase_cpu_limit', 0.3)),
         'OLLAMA_CPU_LIMIT': str(config.get('ollama_cpu_limit', 1.0)),
-        'LANGFLOW_API_KEY': config.get('langflow_api_key', ''),
-        'LANGFLOW_AUTO_LOGIN': str(config.get('langflow_auto_login', True)).lower(),
-        'LANGFLOW_USERNAME': config.get('langflow_username', 'admin'),
-        'LANGFLOW_PASSWORD': config.get('langflow_password', generate_password()),
+        'SUPABASE_ADMIN_PASSWORD': config.get('supabase_admin_password', ''),
         'POSTGRES_PASSWORD': config.get('postgres_password', generate_password()),
         'SUPABASE_ADMIN_LOGIN': config.get('supabase_admin_login', 'admin'),
+        'SUPABASE_ADMIN_PASSWORD': config.get('supabase_admin_password', ''),
         'JWT_SECRET': config.get('jwt_secret', ''),
         'ANON_KEY': config.get('anon_key', ''),
         'SERVICE_ROLE_KEY': config.get('service_role_key', ''),
@@ -153,7 +151,6 @@ LANGFLOW_VERSION=latest
 LANGFLOW_PORT={LANGFLOW_PORT}
 LANGFLOW_MEMORY_LIMIT={LANGFLOW_MEMORY_LIMIT}
 LANGFLOW_CPU_LIMIT={LANGFLOW_CPU_LIMIT}
-LANGFLOW_API_KEY={LANGFLOW_API_KEY}
 # Переменные для nginx-proxy (автоматически заполняются при ROUTING_MODE=subdomain)
 VIRTUAL_HOST_LANGFLOW={VIRTUAL_HOST_LANGFLOW}
 LETSENCRYPT_HOST_LANGFLOW={LETSENCRYPT_HOST_LANGFLOW}
@@ -352,7 +349,8 @@ services:
     ports:
       - "{LANGFLOW_PORT}:7860"
     environment:
-      - LANGFLOW_API_KEY={LANGFLOW_API_KEY}
+      - LANGFLOW_HOST=0.0.0.0
+      - LANGFLOW_PORT=7860
     deploy:
       resources:
         limits:

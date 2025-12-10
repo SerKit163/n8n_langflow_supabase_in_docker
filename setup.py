@@ -462,30 +462,7 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     
     services_config['n8n_port'] = IntPrompt.ask("Порт для N8N (5678)", default=5678)
     services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow (7860)", default=7860)
-    
-    # Настройка автологина Langflow
-    console.print("\n[yellow]Настройка автологина Langflow:[/yellow]")
-    services_config['langflow_auto_login'] = Confirm.ask(
-        "Включить автологин в Langflow?",
-        default=True
-    )
-    if services_config['langflow_auto_login']:
-        services_config['langflow_username'] = Prompt.ask(
-            "Имя пользователя для Langflow",
-            default="admin"
-        )
-        services_config['langflow_password'] = Prompt.ask(
-            "Пароль для Langflow (оставьте пустым для автогенерации)",
-            default="",
-            password=True
-        )
-        if not services_config['langflow_password']:
-            from installer.utils import generate_password
-            services_config['langflow_password'] = generate_password()
-            console.print(f"[green]✓ Пароль сгенерирован: {services_config['langflow_password']}[/green]")
-    else:
-        services_config['langflow_username'] = 'admin'
-        services_config['langflow_password'] = ''
+    console.print("[yellow]💡[/yellow] Langflow: пользователь сам зарегистрируется при первом запуске\n")
     services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase (8000)", default=8000)
     
     # Ollama
@@ -539,10 +516,36 @@ def configure_supabase() -> dict:
             else:
                 console.print("[red]❌ Пароль должен быть минимум 8 символов[/red]")
     
-    # Логин для админки (фиксированный)
-    supabase_admin_login = "admin"
-    console.print(f"\n[cyan]Логин для админки Supabase: {supabase_admin_login}[/cyan]")
-    console.print("[yellow]💡[/yellow] Логин 'admin' будет использоваться для входа в админ-панель Supabase\n")
+    # Логин для админки
+    supabase_admin_login = Prompt.ask(
+        "Логин для админки Supabase Studio",
+        default="admin"
+    )
+    console.print(f"[green]✓ Логин установлен: {supabase_admin_login}[/green]")
+    
+    # Пароль для админки Supabase Studio
+    console.print("\n[cyan]Пароль для админки Supabase Studio:[/cyan]")
+    console.print("[yellow]💡[/yellow] Этот пароль будет использоваться для входа в админ-панель Supabase Studio\n")
+    
+    generate_admin_password = Confirm.ask(
+        "Сгенерировать пароль для админки автоматически?",
+        default=True
+    )
+    
+    if generate_admin_password:
+        supabase_admin_password = generate_password()
+        console.print(f"[green]✓ Пароль для админки сгенерирован: {supabase_admin_password}[/green]")
+        console.print("[yellow]⚠ Сохраните этот пароль! Он понадобится для входа в Supabase Studio[/yellow]")
+    else:
+        while True:
+            supabase_admin_password = Prompt.ask(
+                "Введите пароль для админки Supabase Studio (минимум 8 символов)",
+                password=True
+            )
+            if len(supabase_admin_password) >= 8:
+                break
+            else:
+                console.print("[red]❌ Пароль должен быть минимум 8 символов[/red]")
     
     # Ключи Supabase
     console.print("[yellow]🔑 Ключи Supabase:[/yellow]")
@@ -583,6 +586,7 @@ def configure_supabase() -> dict:
     return {
         'postgres_password': postgres_password,
         'supabase_admin_login': supabase_admin_login,
+        'supabase_admin_password': supabase_admin_password,
         'jwt_secret': jwt_secret,
         'anon_key': anon_key,
         'service_role_key': service_role_key

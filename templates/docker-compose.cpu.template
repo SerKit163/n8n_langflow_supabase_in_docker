@@ -43,21 +43,10 @@ services:
     # ports:
     #   - "7860:7860"
     environment:
-      - LANGFLOW_AUTO_LOGIN=${LANGFLOW_AUTO_LOGIN:-true}
-      - LANGFLOW_USERNAME=${LANGFLOW_USERNAME:-admin}
-      - LANGFLOW_PASSWORD=${LANGFLOW_PASSWORD:-}
-      - LANGFLOW_API_KEY=${LANGFLOW_API_KEY:-}
       - LANGFLOW_HOST=0.0.0.0
       - LANGFLOW_PORT=7860
       - LANGFLOW_CACHE_TYPE=memory
       - LANGFLOW_LANGCHAIN_CACHE=memory
-    command: >
-      langflow run
-      --host 0.0.0.0
-      --port 7860
-      --auto-login
-      --username ${LANGFLOW_USERNAME:-admin}
-      --password ${LANGFLOW_PASSWORD:-}
     deploy:
       resources:
         limits:
@@ -125,6 +114,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - STUDIO_PGUSER=postgres
       - STUDIO_PGPASSWORD=${POSTGRES_PASSWORD}
+      - STUDIO_USERNAME=${SUPABASE_ADMIN_LOGIN:-admin}
+      - STUDIO_PASSWORD=${SUPABASE_ADMIN_PASSWORD}
       - DEFAULT_ORGANIZATION_NAME=Default Organization
       - DEFAULT_PROJECT_NAME=Default Project
       - SUPABASE_DB_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
