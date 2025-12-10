@@ -31,7 +31,7 @@
 
 # Supabase Studio
 {SUPABASE_DOMAIN} {
-    basicauth {
+    basic_auth {
         {SUPABASE_ADMIN_LOGIN} {SUPABASE_ADMIN_PASSWORD_HASH}
     }
     reverse_proxy supabase-studio:3000 {

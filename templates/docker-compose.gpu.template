@@ -49,6 +49,9 @@ services:
       - LANGFLOW_LANGCHAIN_CACHE=memory
       - LANGFLOW_BACKEND_CORS_ORIGINS=*
       - LANGFLOW_FRONTEND_TIMEOUT=60000
+      - LANGFLOW_WORKERS=1
+      - LANGFLOW_WORKER_TIMEOUT=300
+      - LANGFLOW_COMPONENTS_PATH=/app/.venv/lib/python3.12/site-packages/langflow/components
     entrypoint: |
       sh -c "
         # Исправляем права доступа от root
@@ -57,7 +60,7 @@ services:
         chown -R 1000:1000 /app/data 2>/dev/null || true
         chmod -R 755 /app/data 2>/dev/null || true
         # Запускаем langflow (образ сам управляет пользователем)
-        exec langflow run --host 0.0.0.0 --port 7860
+        exec langflow run --host 0.0.0.0 --port 7860 --workers 1
       "
     user: "0"
     deploy:
@@ -149,6 +152,8 @@ services:
     depends_on:
       - supabase-db
     environment:
+      - GOTRUE_DB_DRIVER=postgres
+      - GOTRUE_DB_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
       - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL:-https://localhost:8000}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
       - JWT_SECRET=${JWT_SECRET}
