@@ -39,8 +39,21 @@ def check_resources(hardware: Dict, config: Dict) -> tuple[bool, List[str], List
             f"   Рекомендуется иметь запас минимум 2 GB"
         )
     
-    # Проверка диска
-    required_disk = 20  # Минимум для всех сервисов
+    # Проверка диска (учитываем только выбранные сервисы)
+    # Базовые требования: 5GB для Supabase + по 3GB на каждый дополнительный сервис
+    n8n_enabled = config.get('n8n_enabled', True)
+    langflow_enabled = config.get('langflow_enabled', True)
+    ollama_enabled = config.get('ollama_enabled', False)
+    
+    # Supabase всегда включен (5GB)
+    required_disk = 5
+    if n8n_enabled:
+        required_disk += 3
+    if langflow_enabled:
+        required_disk += 3
+    if ollama_enabled:
+        required_disk += 5  # Ollama требует больше места для моделей
+    
     free_disk = hardware['disk']['free_gb']
     
     if free_disk < required_disk:

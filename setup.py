@@ -720,23 +720,26 @@ def main():
             if not Confirm.ask("Продолжить установку несмотря на ошибки?", default=False):
                 sys.exit(1)
         
-        # Показываем рекомендуемые настройки
+        if recommended_config.get('use_gpu'):
+            console.print("[green]✓ GPU обнаружена - можно использовать Ollama[/green]")
+        
+        # 5. Выбор сервисов для установки (ПЕРЕД проверкой ресурсов!)
+        services_selection = select_services()
+        
+        # Добавляем информацию о выбранных сервисах в конфиг для правильного расчета ресурсов
+        recommended_config.update(services_selection)
+        
+        # Показываем рекомендуемые настройки (только для выбранных сервисов)
         summary = get_resource_summary(recommended_config)
-        console.print(f"\n[cyan]💡 Рекомендуемые настройки:[/cyan]")
+        console.print(f"\n[cyan]💡 Рекомендуемые настройки (для выбранных сервисов):[/cyan]")
         console.print(f"  CPU: {summary['total_cpu_cores']:.1f} ядер")
         console.print(f"  RAM: {summary['total_memory_gb']:.1f} GB")
         console.print(f"  Сервисов: {summary['services_count']}")
         
-        if recommended_config.get('use_gpu'):
-            console.print("[green]✓ GPU обнаружена - можно использовать Ollama[/green]")
-        
-        # 5. Проверка ресурсов
+        # 6. Проверка ресурсов (только для выбранных сервисов)
         if not display_resource_check(hardware, recommended_config):
             if not Confirm.ask("\nПродолжить установку?", default=False):
                 sys.exit(1)
-        
-        # 6. Выбор сервисов для установки
-        services_selection = select_services()
         
         # 7. Выбор режима маршрутизации
         routing_mode = select_routing_mode()

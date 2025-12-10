@@ -107,13 +107,42 @@ def calculate_memory_limit(total_ram: float, percentage: float, min_val: float =
 def get_resource_summary(config: Dict) -> Dict:
     """
     Возвращает сводку по использованию ресурсов
+    Учитывает только включенные сервисы
     """
-    total_cpu = sum(config['cpu_limits'].values())
-    total_memory = sum(config['memory_limits'].values())
+    # Проверяем какие сервисы включены
+    n8n_enabled = config.get('n8n_enabled', True)
+    langflow_enabled = config.get('langflow_enabled', True)
+    ollama_enabled = config.get('ollama_enabled', False)
+    # Supabase всегда включен
+    
+    total_cpu = 0
+    total_memory = 0
+    services_count = 0
+    
+    # Суммируем только для включенных сервисов
+    if n8n_enabled:
+        total_cpu += config['cpu_limits'].get('n8n', 0)
+        total_memory += config['memory_limits'].get('n8n', 0)
+        services_count += 1
+    
+    if langflow_enabled:
+        total_cpu += config['cpu_limits'].get('langflow', 0)
+        total_memory += config['memory_limits'].get('langflow', 0)
+        services_count += 1
+    
+    # Supabase всегда включен
+    total_cpu += config['cpu_limits'].get('supabase', 0)
+    total_memory += config['memory_limits'].get('supabase', 0)
+    services_count += 1
+    
+    if ollama_enabled:
+        total_cpu += config['cpu_limits'].get('ollama', 0)
+        total_memory += config['memory_limits'].get('ollama', 0)
+        services_count += 1
     
     return {
         'total_cpu_cores': total_cpu,
         'total_memory_gb': total_memory,
-        'services_count': len([v for v in config['memory_limits'].values() if v > 0])
+        'services_count': services_count
     }
 
