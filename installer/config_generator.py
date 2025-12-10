@@ -333,6 +333,13 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     if supabase_admin_password:
         supabase_password_hash = hash_password_for_caddy(supabase_admin_password)
     
+    # Если хеш не сгенерирован, удаляем секцию basicauth из Supabase Studio
+    if not supabase_password_hash:
+        import re
+        # Удаляем блок basicauth для Supabase Studio
+        basicauth_pattern = r'    basicauth \{[^}]*\{SUPABASE_ADMIN_LOGIN\}[^}]*\{SUPABASE_ADMIN_PASSWORD_HASH\}[^}]*\}\n'
+        content = re.sub(basicauth_pattern, '', content)
+    
     # Заменяем переменные
     replacements = {
         'CADDY_EMAIL': letsencrypt_email or 'admin@example.com',
