@@ -54,12 +54,23 @@ services:
       - LANGFLOW_WORKER_TIMEOUT=300
       - LANGFLOW_COMPONENTS_PATH=/app/.venv/lib/python3.12/site-packages/langflow/components
     entrypoint: |
-      sh -c "
-        # Создаем все необходимые директории от root
+      /bin/sh -c "
+        # Проверяем, что мы root
+        if [ \"$$(id -u)\" != \"0\" ]; then
+          echo 'ERROR: Must run as root to fix permissions'
+          exit 1
+        fi
+        # Сначала исправляем права на /app/data если volume уже существует
+        if [ -d /app/data ]; then
+          chown -R root:root /app/data || true
+          chmod -R 777 /app/data || true
+        fi
+        # Создаем все необходимые директории
         mkdir -p /app/data/.cache/langflow
         mkdir -p /app/data/logs
         mkdir -p /app/data/.langflow
         # Устанавливаем права на всю директорию /app/data (777 для гарантии работы)
+        chown -R root:root /app/data
         chmod -R 777 /app/data
         # Запускаем langflow от root (образ может переключиться сам)
         exec langflow run --host 0.0.0.0 --port 7860 --workers 1
