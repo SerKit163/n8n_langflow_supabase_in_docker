@@ -65,7 +65,7 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'SUPABASE_KB_PORT': str(config.get('supabase_kb_port', 3000)),
         'OLLAMA_PORT': str(config.get('ollama_port', 11434)),
         'N8N_MEMORY_LIMIT': config.get('n8n_memory_limit', '2g'),
-        'LANGFLOW_MEMORY_LIMIT': config.get('langflow_memory_limit', '2g'),
+        'LANGFLOW_MEMORY_LIMIT': config.get('langflow_memory_limit', '4g'),
         'SUPABASE_MEMORY_LIMIT': config.get('supabase_memory_limit', '1g'),
         'OLLAMA_MEMORY_LIMIT': config.get('ollama_memory_limit', '2g'),
         'N8N_CPU_LIMIT': str(config.get('n8n_cpu_limit', 0.5)),
