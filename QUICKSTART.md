@@ -33,6 +33,16 @@ python3 setup.py
 
 ## Обновление
 
+### Обновление проекта с GitHub
+
+Обновляет код и конфигурацию с сохранением настроек:
+
+```bash
+python3 update_from_github.py
+```
+
+### Обновление версий Docker образов
+
 ```bash
 python3 update.py
 ```
