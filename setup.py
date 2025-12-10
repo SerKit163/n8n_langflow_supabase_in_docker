@@ -746,18 +746,46 @@ def main():
                 
                 # Показываем информацию для доступа
                 console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
+                protocol = 'https' if full_config.get('ssl_enabled') else 'http'
+                
                 if routing_mode == 'subdomain':
+                    # Режим поддоменов
                     if full_config.get('n8n_domain'):
-                        console.print(f"  N8N: http{'s' if full_config.get('ssl_enabled') else ''}://{full_config['n8n_domain']}")
+                        console.print(f"  [green]✓[/green] N8N: {protocol}://{full_config['n8n_domain']}")
                     if full_config.get('langflow_domain'):
-                        console.print(f"  Langflow: http{'s' if full_config.get('ssl_enabled') else ''}://{full_config['langflow_domain']}")
+                        console.print(f"  [green]✓[/green] Langflow: {protocol}://{full_config['langflow_domain']}")
+                    if full_config.get('supabase_domain'):
+                        console.print(f"  [green]✓[/green] Supabase Studio: {protocol}://{full_config['supabase_domain']}")
+                        if full_config.get('supabase_admin_login'):
+                            console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")
+                            if full_config.get('supabase_admin_password'):
+                                console.print(f"    [yellow]Пароль:[/yellow] {full_config['supabase_admin_password']}")
+                    if full_config.get('ollama_enabled') and full_config.get('ollama_domain'):
+                        console.print(f"  [green]✓[/green] Ollama: {protocol}://{full_config['ollama_domain']}")
                 elif routing_mode == 'path':
+                    # Режим путей
                     if full_config.get('base_domain'):
-                        console.print(f"  N8N: http{'s' if full_config.get('ssl_enabled') else ''}://{full_config['base_domain']}{full_config.get('n8n_path', '/n8n')}")
+                        base_url = f"{protocol}://{full_config['base_domain']}"
+                        console.print(f"  [green]✓[/green] N8N: {base_url}{full_config.get('n8n_path', '/n8n')}")
+                        console.print(f"  [green]✓[/green] Langflow: {base_url}{full_config.get('langflow_path', '/langflow')}")
+                        console.print(f"  [green]✓[/green] Supabase Studio: {base_url}{full_config.get('supabase_path', '/supabase')}")
+                        if full_config.get('supabase_admin_login'):
+                            console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")
+                            if full_config.get('supabase_admin_password'):
+                                console.print(f"    [yellow]Пароль:[/yellow] {full_config['supabase_admin_password']}")
+                        if full_config.get('ollama_enabled'):
+                            console.print(f"  [green]✓[/green] Ollama: {base_url}{full_config.get('ollama_path', '/ollama')}")
                 else:
-                    console.print(f"  N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
-                    console.print(f"  Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
-                    console.print(f"  Supabase: http://localhost:{full_config.get('supabase_port', 8000)}")
+                    # Режим портов (localhost)
+                    console.print(f"  [green]✓[/green] N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
+                    console.print(f"  [green]✓[/green] Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
+                    console.print(f"  [green]✓[/green] Supabase Studio: http://localhost:{full_config.get('supabase_kb_port', 3000)}")
+                    if full_config.get('supabase_admin_login'):
+                        console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")
+                        if full_config.get('supabase_admin_password'):
+                            console.print(f"    [yellow]Пароль:[/yellow] {full_config['supabase_admin_password']}")
+                    if full_config.get('ollama_enabled'):
+                        console.print(f"  [green]✓[/green] Ollama: http://localhost:{full_config.get('ollama_port', 11434)}")
                 
                 console.print("\n[yellow]💡 Если сервисы не запустились, проверьте логи:[/yellow]")
                 console.print("[dim]docker-compose logs[/dim]")
