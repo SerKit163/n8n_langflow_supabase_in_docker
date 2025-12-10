@@ -213,12 +213,11 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         write_file(output_path, content)
         return
     
-    # Если Ollama включен, добавляем его в CPU шаблон
-    # ВАЖНО: проверяем что ollama_enabled явно True, а не просто присутствует в config
-    ollama_enabled = config.get('ollama_enabled', False)
+    # ВАЖНО: проверяем что ollama_enabled явно True
     if isinstance(ollama_enabled, str):
         ollama_enabled = ollama_enabled.lower() in ('true', '1', 'yes', 'on')
     
+    # Если Ollama включен, добавляем его в CPU шаблон
     if template_name == "docker-compose.cpu.template" and ollama_enabled:
         # Проверяем, есть ли уже секция ollama
         if '  ollama:' not in content:
@@ -265,10 +264,10 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
             if '  ollama_data:' not in content:
                 content = re.sub(r'(  caddy_config:\s*driver: local\n)', r'\1  ollama_data:\n    driver: local\n', content)
     
-    # Если Ollama не включен, удаляем его из GPU шаблона
-    if template_name == "docker-compose.gpu.template" and not ollama_enabled:
-        # Удаляем секцию ollama
+    # Если Ollama не включен, удаляем его из шаблона (CPU или GPU)
+    if not ollama_enabled:
         import re
+        # Удаляем секцию ollama
         ollama_pattern = r'  ollama:.*?(?=\n  [a-z]|\nvolumes:|\Z)'
         content = re.sub(ollama_pattern, '', content, flags=re.DOTALL)
         # Удаляем ollama_data из volumes
