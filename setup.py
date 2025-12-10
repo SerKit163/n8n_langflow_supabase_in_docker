@@ -437,10 +437,27 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
         ))
         
         console.print("\n[yellow]Langflow:[/yellow]")
+        console.print(
+            "[red]⚠️  ВНИМАНИЕ: Langflow требует много памяти для работы с ИИ агентами![/red]\n"
+            "[yellow]Рекомендации:[/yellow]\n"
+            "  • Минимум: 3GB для базовой работы\n"
+            "  • Оптимально: 4-6GB для создания ИИ агентов\n"
+            "  • При сложных агентах: может потребоваться до 8GB\n"
+            f"  • У вас доступно: {hardware['ram']['total_gb']}GB RAM\n"
+        )
         services_config['langflow_memory_limit'] = Prompt.ask(
-            "Лимит памяти",
+            "Лимит памяти для Langflow",
             default=f"{recommended_config['memory_limits']['langflow']:.1f}g"
         )
+        
+        # Предупреждение если лимит слишком мал
+        langflow_limit_gb = float(services_config['langflow_memory_limit'].replace('g', ''))
+        if langflow_limit_gb < 3:
+            console.print(
+                "[yellow]⚠️  Предупреждение: Лимит меньше 3GB может быть недостаточным "
+                "для работы с ИИ агентами![/yellow]"
+            )
+        
         services_config['langflow_cpu_limit'] = float(Prompt.ask(
             "Лимит CPU",
             default=str(recommended_config['cpu_limits']['langflow'])
