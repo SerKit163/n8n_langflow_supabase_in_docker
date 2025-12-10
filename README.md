@@ -124,6 +124,38 @@ python3 remove_ollama.py
 
 **Внимание:** Все данные Ollama (модели) будут удалены безвозвратно!
 
+### Удаление N8N
+
+Если вы хотите удалить N8N из установки:
+
+```bash
+python3 remove_n8n.py
+```
+
+Этот скрипт:
+- ✅ Остановит и удалит контейнер N8N
+- ✅ Удалит volume с данными N8N (workflows, credentials) - освободит место
+- ✅ Удалит N8N из .env, docker-compose.yml и Caddyfile
+- ✅ Перезапустит остальные сервисы
+
+**Внимание:** Все данные N8N (workflows, credentials) будут удалены безвозвратно!
+
+### Удаление Langflow
+
+Если вы хотите удалить Langflow из установки:
+
+```bash
+python3 remove_langflow.py
+```
+
+Этот скрипт:
+- ✅ Остановит и удалит контейнер Langflow
+- ✅ Удалит volume с данными Langflow (flows, компоненты) - освободит место
+- ✅ Удалит Langflow из .env, docker-compose.yml и Caddyfile
+- ✅ Перезапустит остальные сервисы
+
+**Внимание:** Все данные Langflow (flows, компоненты) будут удалены безвозвратно!
+
 ## ⚙️ Ручная установка
 
 Если вы предпочитаете ручную установку:
@@ -236,6 +268,8 @@ n8n_langflow_supabase_in_docker/
 ├── update_from_github.py # Скрипт обновления с GitHub
 ├── add_ollama.py         # Скрипт добавления Ollama
 ├── remove_ollama.py      # Скрипт удаления Ollama
+├── remove_n8n.py         # Скрипт удаления N8N
+├── remove_langflow.py    # Скрипт удаления Langflow
 ├── docker-compose.yml    # Docker Compose конфигурация
 ├── .env                  # Переменные окружения (не коммитится)
 ├── installer/            # Модули установщика
