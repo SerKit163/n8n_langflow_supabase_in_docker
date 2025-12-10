@@ -54,6 +54,8 @@ services:
       - LANGFLOW_COMPONENTS_PATH=/app/.venv/lib/python3.12/site-packages/langflow/components
       - LANGFLOW_LOAD_FLOWS_ON_STARTUP=false
       - LANGFLOW_AUTO_LOGIN=false
+      - LANGFLOW_DISABLE_COMPOSIO=true
+      - PYTHONUNBUFFERED=1
     user: "0"
     entrypoint: |
       /bin/sh -c "

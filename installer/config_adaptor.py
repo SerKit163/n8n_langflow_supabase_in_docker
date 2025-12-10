@@ -30,7 +30,7 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
         },
         'memory_limits': {
             'n8n': calculate_memory_limit(total_ram, 0.2, min_val=1, max_val=4),
-            'langflow': calculate_memory_limit(total_ram, 0.2, min_val=1, max_val=4),
+            'langflow': calculate_memory_limit(total_ram, 0.35, min_val=3, max_val=8),
             'supabase': calculate_memory_limit(total_ram, 0.1, min_val=0.5, max_val=2),
             'ollama': calculate_memory_limit(total_ram, 0.4, min_val=2, max_val=8) if has_gpu else 0
         },
