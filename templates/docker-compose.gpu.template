@@ -52,17 +52,18 @@ services:
       - LANGFLOW_WORKERS=1
       - LANGFLOW_WORKER_TIMEOUT=300
       - LANGFLOW_COMPONENTS_PATH=/app/.venv/lib/python3.12/site-packages/langflow/components
+    user: "0"
     entrypoint: |
       sh -c "
-        # Исправляем права доступа от root
+        # Создаем все необходимые директории от root
         mkdir -p /app/data/.cache/langflow
         mkdir -p /app/data/logs
-        chown -R 1000:1000 /app/data 2>/dev/null || true
-        chmod -R 755 /app/data 2>/dev/null || true
-        # Запускаем langflow (образ сам управляет пользователем)
+        mkdir -p /app/data/.langflow
+        # Устанавливаем права на всю директорию /app/data (777 для гарантии работы)
+        chmod -R 777 /app/data
+        # Запускаем langflow от root (образ может переключиться сам)
         exec langflow run --host 0.0.0.0 --port 7860 --workers 1
       "
-    user: "0"
     deploy:
       resources:
         limits:

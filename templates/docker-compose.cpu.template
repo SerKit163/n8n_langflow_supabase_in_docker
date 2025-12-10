@@ -39,6 +39,7 @@ services:
   langflow:
     image: langflowai/langflow:latest
     container_name: langflow
+    user: "0"
     # ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy.
     # ports:
     #   - "7860:7860"
@@ -54,12 +55,13 @@ services:
       - LANGFLOW_COMPONENTS_PATH=/app/.venv/lib/python3.12/site-packages/langflow/components
     entrypoint: |
       sh -c "
-        # Исправляем права доступа от root
+        # Создаем все необходимые директории от root
         mkdir -p /app/data/.cache/langflow
         mkdir -p /app/data/logs
-        chown -R 1000:1000 /app/data 2>/dev/null || true
-        chmod -R 755 /app/data 2>/dev/null || true
-        # Запускаем langflow (образ сам управляет пользователем)
+        mkdir -p /app/data/.langflow
+        # Устанавливаем права на всю директорию /app/data (777 для гарантии работы)
+        chmod -R 777 /app/data
+        # Запускаем langflow от root (образ может переключиться сам)
         exec langflow run --host 0.0.0.0 --port 7860 --workers 1
       "
     deploy:
