@@ -687,6 +687,19 @@ def main():
         if full_config.get('ollama_enabled'):
             ensure_dir("volumes/ollama_data")
         
+        # Генерируем хеш пароля для Supabase Studio basicauth
+        if full_config.get('supabase_admin_password'):
+            from installer.config_generator import hash_password_for_caddy
+            supabase_password_hash = hash_password_for_caddy(full_config['supabase_admin_password'])
+            if supabase_password_hash:
+                full_config['supabase_admin_password_hash'] = supabase_password_hash
+                console.print("[green]✓ Хеш пароля для Supabase Studio сгенерирован[/green]")
+            else:
+                console.print("[yellow]⚠ Не удалось сгенерировать хеш пароля. Установите bcrypt: pip install bcrypt[/yellow]")
+                full_config['supabase_admin_password_hash'] = ''
+        else:
+            full_config['supabase_admin_password_hash'] = ''
+        
         # Генерируем .env
         generate_env_file(full_config)
         console.print("[green]✓ .env файл создан[/green]")

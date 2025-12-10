@@ -76,6 +76,7 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'POSTGRES_PASSWORD': config.get('postgres_password', generate_password()),
         'SUPABASE_ADMIN_LOGIN': config.get('supabase_admin_login', 'admin'),
         'SUPABASE_ADMIN_PASSWORD': config.get('supabase_admin_password', ''),
+        'SUPABASE_ADMIN_PASSWORD_HASH': config.get('supabase_admin_password_hash', ''),
         'JWT_SECRET': config.get('jwt_secret', ''),
         'ANON_KEY': config.get('anon_key', ''),
         'SERVICE_ROLE_KEY': config.get('service_role_key', ''),
@@ -328,16 +329,18 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     # Генерируем хеш пароля для Supabase Studio basicauth
     supabase_admin_login = config.get('supabase_admin_login', 'admin')
     supabase_admin_password = config.get('supabase_admin_password', '')
-    supabase_password_hash = ''
+    # Используем уже сгенерированный хеш из конфига, если есть
+    supabase_password_hash = config.get('supabase_admin_password_hash', '')
     
-    if supabase_admin_password:
+    # Если хеш не задан, но есть пароль - генерируем хеш
+    if not supabase_password_hash and supabase_admin_password:
         supabase_password_hash = hash_password_for_caddy(supabase_admin_password)
     
-    # Если хеш не сгенерирован, удаляем секцию basicauth из Supabase Studio
+    # Если хеш не сгенерирован, удаляем секцию basic_auth из Supabase Studio
     if not supabase_password_hash:
         import re
-        # Удаляем блок basicauth для Supabase Studio
-        basicauth_pattern = r'    basicauth \{[^}]*\{SUPABASE_ADMIN_LOGIN\}[^}]*\{SUPABASE_ADMIN_PASSWORD_HASH\}[^}]*\}\n'
+        # Удаляем блок basic_auth для Supabase Studio
+        basicauth_pattern = r'    basic_auth \{[^}]*\{SUPABASE_ADMIN_LOGIN\}[^}]*\{SUPABASE_ADMIN_PASSWORD_HASH\}[^}]*\}\n'
         content = re.sub(basicauth_pattern, '', content)
     
     # Заменяем переменные

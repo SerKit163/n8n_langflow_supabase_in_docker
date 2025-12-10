@@ -154,6 +154,7 @@ services:
     environment:
       - GOTRUE_DB_DRIVER=postgres
       - GOTRUE_DB_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - GOTRUE_SITE_URL=${SUPABASE_PUBLIC_URL:-https://localhost:8000}
       - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL:-https://localhost:8000}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
       - JWT_SECRET=${JWT_SECRET}
