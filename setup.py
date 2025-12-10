@@ -479,7 +479,6 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     
     services_config['n8n_port'] = IntPrompt.ask("Порт для N8N (5678)", default=5678)
     services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow (7860)", default=7860)
-    console.print("[yellow]💡[/yellow] Langflow: пользователь сам зарегистрируется при первом запуске\n")
     services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase (8000)", default=8000)
     
     # Ollama
