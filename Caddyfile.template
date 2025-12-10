@@ -15,6 +15,7 @@
 
 # Langflow
 {LANGFLOW_DOMAIN} {
+    # Увеличиваем таймауты для Langflow
     reverse_proxy langflow:7860 {
         header_up Host {host}
         header_up X-Real-IP {remote}
@@ -22,8 +23,22 @@
         header_up X-Forwarded-Proto {scheme}
         
         # WebSocket support для Langflow
-        header_up Connection "Upgrade"
-        header_up Upgrade "websocket"
+        transport http {
+            dial_timeout 30s
+            response_header_timeout 60s
+        }
+    }
+    
+    # Поддержка WebSocket для Langflow
+    @websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websocket langflow:7860 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
     }
 }
 
