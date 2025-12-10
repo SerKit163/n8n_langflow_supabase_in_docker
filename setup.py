@@ -26,7 +26,7 @@ from installer.docker_manager import (
     check_docker, check_docker_compose, is_docker_running,
     get_docker_version, get_docker_compose_version, docker_compose_up
 )
-from installer.config_generator import generate_env_file, generate_docker_compose
+from installer.config_generator import generate_env_file, generate_docker_compose, generate_caddyfile
 # nginx-proxy автоматически настраивает маршрутизацию, ручная генерация конфигов не нужна
 # from installer.nginx_config import generate_nginx_configs
 from installer.utils import generate_secret_key, generate_password, ensure_dir
@@ -462,6 +462,30 @@ def configure_services(recommended_config: dict, hardware: dict) -> dict:
     
     services_config['n8n_port'] = IntPrompt.ask("Порт для N8N (5678)", default=5678)
     services_config['langflow_port'] = IntPrompt.ask("Порт для Langflow (7860)", default=7860)
+    
+    # Настройка автологина Langflow
+    console.print("\n[yellow]Настройка автологина Langflow:[/yellow]")
+    services_config['langflow_auto_login'] = Confirm.ask(
+        "Включить автологин в Langflow?",
+        default=True
+    )
+    if services_config['langflow_auto_login']:
+        services_config['langflow_username'] = Prompt.ask(
+            "Имя пользователя для Langflow",
+            default="admin"
+        )
+        services_config['langflow_password'] = Prompt.ask(
+            "Пароль для Langflow (оставьте пустым для автогенерации)",
+            default="",
+            password=True
+        )
+        if not services_config['langflow_password']:
+            from installer.utils import generate_password
+            services_config['langflow_password'] = generate_password()
+            console.print(f"[green]✓ Пароль сгенерирован: {services_config['langflow_password']}[/green]")
+    else:
+        services_config['langflow_username'] = 'admin'
+        services_config['langflow_password'] = ''
     services_config['supabase_port'] = IntPrompt.ask("Порт для Supabase (8000)", default=8000)
     
     # Ollama
@@ -666,6 +690,10 @@ def main():
         # Генерируем docker-compose.yml
         generate_docker_compose(full_config, hardware)
         console.print("[green]✓ docker-compose.yml создан[/green]")
+        
+        # Генерация Caddyfile
+        generate_caddyfile(full_config)
+        console.print("[green]✓ Caddyfile создан[/green]")
         
         # nginx-proxy автоматически настраивает маршрутизацию через переменные VIRTUAL_HOST
         if routing_mode == 'subdomain':

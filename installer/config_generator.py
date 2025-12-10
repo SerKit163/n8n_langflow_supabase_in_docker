@@ -72,6 +72,9 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'SUPABASE_CPU_LIMIT': str(config.get('supabase_cpu_limit', 0.3)),
         'OLLAMA_CPU_LIMIT': str(config.get('ollama_cpu_limit', 1.0)),
         'LANGFLOW_API_KEY': config.get('langflow_api_key', ''),
+        'LANGFLOW_AUTO_LOGIN': str(config.get('langflow_auto_login', True)).lower(),
+        'LANGFLOW_USERNAME': config.get('langflow_username', 'admin'),
+        'LANGFLOW_PASSWORD': config.get('langflow_password', generate_password()),
         'POSTGRES_PASSWORD': config.get('postgres_password', generate_password()),
         'SUPABASE_ADMIN_LOGIN': config.get('supabase_admin_login', 'admin'),
         'JWT_SECRET': config.get('jwt_secret', ''),
@@ -238,6 +241,88 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
     
     write_file(output_path, content)
+
+
+def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
+    """
+    Генерирует Caddyfile из конфигурации
+    """
+    template_path = get_project_root() / "Caddyfile.template"
+    
+    if not template_path.exists():
+        # Создаем базовый Caddyfile если шаблона нет
+        content = generate_base_caddyfile_template()
+    else:
+        content = template_path.read_text(encoding='utf-8')
+    
+    routing_mode = config.get('routing_mode', '')
+    letsencrypt_email = config.get('letsencrypt_email', '') or ''
+    
+    # Получаем домены
+    n8n_domain = config.get('n8n_domain', '') or 'localhost'
+    langflow_domain = config.get('langflow_domain', '') or 'localhost'
+    supabase_domain = config.get('supabase_domain', '') or 'localhost'
+    ollama_domain = config.get('ollama_domain', '') or 'localhost'
+    ollama_enabled = config.get('ollama_enabled', False)
+    
+    # Если режим поддоменов, используем домены, иначе localhost
+    if routing_mode == 'subdomain':
+        # Используем реальные домены
+        n8n_domain = n8n_domain or 'n8n.localhost'
+        langflow_domain = langflow_domain or 'langflow.localhost'
+        supabase_domain = supabase_domain or 'supabase.localhost'
+        ollama_domain = ollama_domain or 'ollama.localhost'
+    else:
+        # Для режима портов не используем Caddy, но оставляем localhost для совместимости
+        n8n_domain = 'localhost'
+        langflow_domain = 'localhost'
+        supabase_domain = 'localhost'
+        ollama_domain = 'localhost'
+    
+    # Заменяем переменные
+    replacements = {
+        'CADDY_EMAIL': letsencrypt_email or 'admin@example.com',
+        'N8N_DOMAIN': n8n_domain,
+        'LANGFLOW_DOMAIN': langflow_domain,
+        'SUPABASE_DOMAIN': supabase_domain,
+        'OLLAMA_DOMAIN': ollama_domain if ollama_enabled else '',
+    }
+    
+    # Заменяем все переменные
+    for key, value in replacements.items():
+        content = content.replace(f'{{{key}}}', str(value))
+    
+    # Удаляем секцию Ollama если она не включена
+    if not ollama_enabled:
+        import re
+        ollama_pattern = r'# Ollama.*?\n\n'
+        content = re.sub(ollama_pattern, '', content, flags=re.DOTALL)
+    
+    write_file(output_path, content)
+
+
+def generate_base_caddyfile_template() -> str:
+    """Генерирует базовый шаблон Caddyfile"""
+    return """{
+    email admin@example.com
+    auto_https disable_redirects
+}
+
+# N8N
+localhost {
+    reverse_proxy n8n:5678
+}
+
+# Langflow
+localhost {
+    reverse_proxy langflow:7860
+}
+
+# Supabase Studio
+localhost {
+    reverse_proxy supabase-studio:3000
+}
+"""
 
 
 def generate_base_docker_compose(config: Dict, hardware: Dict) -> str:

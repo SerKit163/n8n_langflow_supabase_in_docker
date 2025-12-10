@@ -1,0 +1,49 @@
+{
+    email {CADDY_EMAIL}
+    auto_https disable_redirects
+}
+
+# N8N
+{N8N_DOMAIN} {
+    reverse_proxy n8n:5678 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Langflow
+{LANGFLOW_DOMAIN} {
+    reverse_proxy langflow:7860 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+        
+        # WebSocket support для Langflow
+        header_up Connection "Upgrade"
+        header_up Upgrade "websocket"
+    }
+}
+
+# Supabase Studio
+{SUPABASE_DOMAIN} {
+    reverse_proxy supabase-studio:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Ollama (если включен)
+{OLLAMA_DOMAIN} {
+    reverse_proxy ollama:11434 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
