@@ -1,7 +1,9 @@
 {
     email {CADDY_EMAIL}
-    # Caddy автоматически получает сертификаты от Let's Encrypt
-    # и перенаправляет HTTP на HTTPS
+    # ZeroSSL - бесплатная альтернатива Let's Encrypt без строгих лимитов
+    # Переключено на ZeroSSL для обхода лимитов Let's Encrypt
+    acme_ca https://acme.zerossl.com/v2/DV90
+    # Caddy автоматически перенаправляет HTTP на HTTPS
 }
 
 # N8N
