@@ -687,6 +687,17 @@ def main():
             console.print("\n[red]Установка прервана из-за ошибок[/red]")
             sys.exit(1)
         
+        # 2.5. Опциональная настройка firewall (как в LISA)
+        try:
+            from setup_firewall import setup_firewall, check_ufw_installed
+            if check_ufw_installed():
+                if Confirm.ask("\n[cyan]Настроить firewall (ufw)? Откроет порты 22, 80, 443[/cyan]", default=True):
+                    setup_firewall()
+        except ImportError:
+            pass  # Скрипт setup_firewall.py может отсутствовать
+        except Exception as e:
+            console.print(f"[yellow]⚠ Не удалось настроить firewall: {e}[/yellow]")
+        
         # 3. Определение железа
         console.print("\n[cyan]🔍 Анализ системы...[/cyan]")
         with Progress(
