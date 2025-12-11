@@ -138,6 +138,46 @@ def stop_and_remove_ollama(remove_volume=True):
                     console.print("[yellow]⚠️  Volume не найден (возможно, уже удален)[/yellow]")
         except Exception as e:
             console.print(f"[yellow]⚠️  Ошибка при удалении volume: {e}[/yellow]")
+    
+    # Удаляем образ Ollama если он не используется
+    try:
+        console.print("Проверка образа Ollama...")
+        # Проверяем разные варианты имени образа
+        ollama_images = ["ollama/ollama", "ollama"]
+        for image_pattern in ollama_images:
+            result = subprocess.run(
+                ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}", image_pattern],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.stdout.strip():
+                images = result.stdout.strip().split('\n')
+                for image in images:
+                    # Проверяем, используется ли образ
+                    check_result = subprocess.run(
+                        ["docker", "ps", "-a", "--filter", f"ancestor={image}", "--format", "{{.ID}}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    if not check_result.stdout.strip():
+                        # Образ не используется, удаляем
+                        console.print(f"Удаление неиспользуемого образа {image}...")
+                        rm_result = subprocess.run(
+                            ["docker", "rmi", "-f", image],
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                        if rm_result.returncode == 0:
+                            console.print(f"[green]✓ Образ {image} удален[/green]")
+                        else:
+                            console.print(f"[yellow]⚠️  Не удалось удалить образ {image}: {rm_result.stderr}[/yellow]")
+                    else:
+                        console.print(f"[yellow]⚠️  Образ {image} все еще используется, пропускаем[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Ошибка при проверке/удалении образа: {e}[/yellow]")
 
 
 def remove_ollama_from_config():
