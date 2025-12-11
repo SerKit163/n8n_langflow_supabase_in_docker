@@ -437,31 +437,49 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     routing_mode = config.get('routing_mode', '')
     letsencrypt_email = config.get('letsencrypt_email', '') or ''
     
-    # Проверяем какие сервисы включены
-    n8n_enabled = config.get('n8n_enabled', True)
-    langflow_enabled = config.get('langflow_enabled', True)
+    # Проверяем какие сервисы включены (по умолчанию False для безопасности)
+    n8n_enabled = config.get('n8n_enabled', False)
+    langflow_enabled = config.get('langflow_enabled', False)
     ollama_enabled = config.get('ollama_enabled', False)
     # Supabase всегда включен
     
-    # Получаем домены
-    n8n_domain = config.get('n8n_domain', '') or 'localhost'
-    langflow_domain = config.get('langflow_domain', '') or 'localhost'
+    # Получаем домены только для включенных сервисов
+    if n8n_enabled:
+        n8n_domain = config.get('n8n_domain', '') or 'localhost'
+    else:
+        n8n_domain = ''
+    
+    if langflow_enabled:
+        langflow_domain = config.get('langflow_domain', '') or 'localhost'
+    else:
+        langflow_domain = ''
+    
     supabase_domain = config.get('supabase_domain', '') or 'localhost'
-    ollama_domain = config.get('ollama_domain', '') or 'localhost'
+    
+    if ollama_enabled:
+        ollama_domain = config.get('ollama_domain', '') or 'localhost'
+    else:
+        ollama_domain = ''
     
     # Если режим поддоменов, используем домены, иначе localhost
     if routing_mode == 'subdomain':
-        # Используем реальные домены
-        n8n_domain = n8n_domain or 'n8n.localhost'
-        langflow_domain = langflow_domain or 'langflow.localhost'
+        # Используем реальные домены только для включенных сервисов
+        if n8n_enabled:
+            n8n_domain = n8n_domain or 'n8n.localhost'
+        if langflow_enabled:
+            langflow_domain = langflow_domain or 'langflow.localhost'
         supabase_domain = supabase_domain or 'supabase.localhost'
-        ollama_domain = ollama_domain or 'ollama.localhost'
+        if ollama_enabled:
+            ollama_domain = ollama_domain or 'ollama.localhost'
     else:
         # Для режима портов не используем Caddy, но оставляем localhost для совместимости
-        n8n_domain = 'localhost'
-        langflow_domain = 'localhost'
+        if n8n_enabled:
+            n8n_domain = 'localhost'
+        if langflow_enabled:
+            langflow_domain = 'localhost'
         supabase_domain = 'localhost'
-        ollama_domain = 'localhost'
+        if ollama_enabled:
+            ollama_domain = 'localhost'
     
     # Генерируем хеш пароля для Supabase Studio basicauth
     supabase_admin_login = config.get('supabase_admin_login', 'admin')
@@ -483,11 +501,11 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
         basicauth_pattern = r'    basic_auth \{[^}]*\{SUPABASE_ADMIN_LOGIN\}[^}]*\{SUPABASE_ADMIN_PASSWORD_HASH\}[^}]*\}\n'
         content = re.sub(basicauth_pattern, '', content)
     
-    # Заменяем переменные
+    # Заменяем переменные (только для включенных сервисов)
     replacements = {
         'CADDY_EMAIL': letsencrypt_email or 'admin@example.com',
-        'N8N_DOMAIN': n8n_domain,
-        'LANGFLOW_DOMAIN': langflow_domain,
+        'N8N_DOMAIN': n8n_domain if n8n_enabled else '',
+        'LANGFLOW_DOMAIN': langflow_domain if langflow_enabled else '',
         'SUPABASE_DOMAIN': supabase_domain,
         'OLLAMA_DOMAIN': ollama_domain if ollama_enabled else '',
         'SUPABASE_ADMIN_LOGIN': supabase_admin_login,
