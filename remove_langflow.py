@@ -130,9 +130,12 @@ def stop_and_remove_langflow(remove_volume=True):
         except Exception as e:
             console.print(f"[yellow]⚠️  Ошибка при удалении volume: {e}[/yellow]")
     
-    # Удаляем образ Langflow если он не используется
+
+
+def remove_langflow_image():
+    """Удаляет неиспользуемый образ Langflow"""
     try:
-        console.print("Проверка образа Langflow...")
+        console.print("\n[cyan]🖼️  Проверка образа Langflow...[/cyan]")
         result = subprocess.run(
             ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}", "langflowai/langflow"],
             capture_output=True,
@@ -159,7 +162,7 @@ def stop_and_remove_langflow(remove_volume=True):
                         timeout=60
                     )
                     if rm_result.returncode == 0:
-                        console.print(f"[green]✓ Образ {image} удален[/green]")
+                        console.print(f"[green]✓ Образ {image} удален (освобождено ~15GB)[/green]")
                     else:
                         console.print(f"[yellow]⚠️  Не удалось удалить образ {image}: {rm_result.stderr}[/yellow]")
                 else:
@@ -341,6 +344,7 @@ def show_summary():
     console.print("\n[cyan]📊 Освобожденное место:[/cyan]")
     console.print("  • Контейнер Langflow удален")
     console.print("  • Volume с данными Langflow удален (flows, компоненты)")
+    console.print("  • Образ Langflow удален (~15GB)")
     console.print("  • Конфигурация обновлена")
     
     console.print("\n[yellow]💡 Для проверки освобожденного места:[/yellow]")
@@ -383,6 +387,9 @@ def main():
     if not remove_langflow_from_config():
         console.print("[red]❌ Не удалось обновить конфигурацию[/red]")
         sys.exit(1)
+    
+    # Удаляем неиспользуемый образ Langflow (всегда, независимо от наличия контейнера)
+    remove_langflow_image()
     
     # Перезапускаем сервисы
     restart_services()
