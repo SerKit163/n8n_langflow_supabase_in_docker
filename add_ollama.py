@@ -14,6 +14,7 @@ from installer.config_adaptor import adapt_config_for_hardware
 from installer.config_generator import generate_docker_compose, generate_caddyfile, generate_env_file
 from installer.utils import ensure_dir
 from installer.validator import validate_domain, validate_path
+from installer.docker_manager import docker_compose_up
 import subprocess
 
 console = Console()

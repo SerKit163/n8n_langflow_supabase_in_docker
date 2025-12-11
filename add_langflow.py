@@ -14,6 +14,7 @@ from installer.config_adaptor import adapt_config_for_hardware
 from installer.config_generator import generate_docker_compose, generate_caddyfile, generate_env_file
 from installer.utils import ensure_dir
 from installer.validator import validate_domain, validate_path
+from installer.docker_manager import docker_compose_up
 import subprocess
 
 console = Console()
@@ -327,14 +328,35 @@ def start_langflow():
     console.print("\n[cyan]🚀 Запуск Langflow...[/cyan]")
     
     if Confirm.ask("Запустить Langflow сейчас?", default=True):
-        try:
-            result = subprocess.run(
-                ["docker-compose", "up", "-d", "langflow"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+        # Используем docker_compose_up для показа прогресса загрузки образов
+        if docker_compose_up(detach=True):
             console.print("[green]✓ Langflow запущен![/green]")
+            
+            # Показываем информацию о доступе
+            console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
+            try:
+                config = dotenv_values(".env")
+                routing_mode = config.get('ROUTING_MODE', '')
+                
+                if routing_mode == 'subdomain':
+                    domain = config.get('LANGFLOW_DOMAIN', '')
+                    if domain:
+                        protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
+                        console.print(f"  [green]✓[/green] Langflow: {protocol}://{domain}")
+                elif routing_mode == 'path':
+                    base_domain = config.get('BASE_DOMAIN', '')
+                    langflow_path = config.get('LANGFLOW_PATH', '/langflow')
+                    if base_domain:
+                        protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
+                        console.print(f"  [green]✓[/green] Langflow: {protocol}://{base_domain}{langflow_path}")
+                else:
+                    port = config.get('LANGFLOW_PORT', '7860')
+                    console.print(f"  [green]✓[/green] Langflow: http://localhost:{port}")
+                
+                console.print("\n[yellow]💡 При первом запуске Langflow может занять несколько минут для инициализации[/yellow]")
+                console.print("[yellow]💡 Проверьте логи если страница не загружается: docker-compose logs langflow[/yellow]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Не удалось получить информацию о доступе: {e}[/yellow]")
             
             # Показываем информацию о доступе
             console.print("\n[cyan]📋 Информация для доступа:[/cyan]")

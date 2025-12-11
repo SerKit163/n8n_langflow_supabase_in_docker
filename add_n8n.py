@@ -14,6 +14,7 @@ from installer.config_adaptor import adapt_config_for_hardware
 from installer.config_generator import generate_docker_compose, generate_caddyfile, generate_env_file
 from installer.utils import ensure_dir
 from installer.validator import validate_domain, validate_path
+from installer.docker_manager import docker_compose_up
 import subprocess
 
 console = Console()
@@ -331,13 +332,8 @@ def start_n8n():
     console.print("\n[cyan]🚀 Запуск N8N...[/cyan]")
     
     if Confirm.ask("Запустить N8N сейчас?", default=True):
-        try:
-            result = subprocess.run(
-                ["docker-compose", "up", "-d", "n8n"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+        # Используем docker_compose_up для показа прогресса загрузки образов
+        if docker_compose_up(detach=True):
             console.print("[green]✓ N8N запущен![/green]")
             
             # Показываем информацию о доступе

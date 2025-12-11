@@ -31,10 +31,10 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
         },
         'memory_limits': {
             'n8n': calculate_memory_limit(total_ram, 0.2, min_val=1, max_val=4),
-            # Langflow: минимум 3GB, оптимально 40% от RAM, максимум 8GB
-            # Для 6GB RAM это даст 2.4GB, но минимум 3GB, так что будет 3GB
-            # Для 8GB RAM это даст 3.2GB
-            'langflow': calculate_memory_limit(total_ram, 0.4, min_val=3, max_val=8),
+            # Langflow: минимум 4GB, оптимально 40% от RAM, максимум 8GB
+            # Для 6GB RAM это даст 2.4GB, но минимум 4GB, так что будет 4GB
+            # Для 8GB RAM это даст 3.2GB, но минимум 4GB, так что будет 4GB
+            'langflow': calculate_memory_limit(total_ram, 0.4, min_val=4, max_val=8),
             'supabase': calculate_memory_limit(total_ram, 0.1, min_val=0.5, max_val=2),
             # Ollama: для GPU версии больше памяти, для CPU версии минимум 2GB
             'ollama': calculate_memory_limit(total_ram, 0.4, min_val=2, max_val=8) if has_gpu else calculate_memory_limit(total_ram, 0.3, min_val=2, max_val=4)
@@ -64,10 +64,10 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
             f"Текущий лимит: {langflow_memory}GB из {total_ram}GB доступных. "
             f"При создании сложных агентов память может увеличиться до 4-6GB."
         )
-    if langflow_memory < 3:
+    if langflow_memory < 4:
         warnings.append(
             f"⚠️  Лимит памяти для Langflow ({langflow_memory}GB) может быть недостаточным "
-            f"для работы с ИИ агентами. Рекомендуется минимум 3GB, оптимально 4-6GB."
+            f"для работы с ИИ агентами. Рекомендуется минимум 4GB, оптимально 4-6GB."
         )
     
     # Проверка Ollama
