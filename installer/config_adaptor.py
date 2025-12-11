@@ -35,8 +35,7 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
             # Для VPS < 8GB: минимум 3GB (чтобы не превышать доступную RAM)
             # Для VPS >= 8GB: минимум 4GB (рекомендуется для работы с AI агентами)
             # Оптимально 40% от RAM, максимум 8GB
-            langflow_min = 3.0 if total_ram < 8 else 4.0
-            'langflow': calculate_memory_limit(total_ram, 0.4, min_val=langflow_min, max_val=8),
+            'langflow': calculate_memory_limit(total_ram, 0.4, min_val=(3.0 if total_ram < 8 else 4.0), max_val=8),
             'supabase': calculate_memory_limit(total_ram, 0.1, min_val=0.5, max_val=2),
             # Ollama: для GPU версии больше памяти, для CPU версии минимум 2GB
             'ollama': calculate_memory_limit(total_ram, 0.4, min_val=2, max_val=8) if has_gpu else calculate_memory_limit(total_ram, 0.3, min_val=2, max_val=4)
