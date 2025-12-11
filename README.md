@@ -351,6 +351,9 @@ n8n_langflow_supabase_in_docker/
 ├── update.py             # Скрипт обновления
 ├── update_from_github.py # Скрипт обновления с GitHub
 ├── add_ollama.py         # Скрипт добавления Ollama
+├── add_ollama.py         # Скрипт добавления Ollama
+├── add_n8n.py            # Скрипт добавления N8N
+├── add_langflow.py       # Скрипт добавления Langflow
 ├── remove_ollama.py      # Скрипт удаления Ollama
 ├── remove_n8n.py         # Скрипт удаления N8N
 ├── remove_langflow.py    # Скрипт удаления Langflow
