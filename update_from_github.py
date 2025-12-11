@@ -171,9 +171,32 @@ def update_from_github():
                 console.print("[green]✓ Код успешно обновлен с GitHub[/green]")
                 if result.stdout.strip():
                     console.print(result.stdout)
+                
+                # Если были изменения в stash, предлагаем восстановить
+                if has_changes and choice == "1":
+                    console.print("\n[cyan]💡 У вас были сохранены изменения в stash[/cyan]")
+                    if Confirm.ask("Восстановить изменения из stash?", default=True):
+                        stash_pop = subprocess.run(
+                            ['git', 'stash', 'pop'],
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
+                        if stash_pop.returncode == 0:
+                            console.print("[green]✓ Изменения восстановлены из stash[/green]")
+                        else:
+                            console.print("[yellow]⚠ Не удалось восстановить из stash (возможны конфликты)[/yellow]")
+                            console.print("[cyan]💡 Восстановите вручную: git stash pop[/cyan]")
+                            if stash_pop.stderr:
+                                console.print(f"[dim]{stash_pop.stderr}[/dim]")
+                
                 return True
             else:
                 console.print(f"[red]❌ Ошибка при обновлении: {result.stderr}[/red]")
+                # Если был stash, предупреждаем
+                if has_changes and choice == "1":
+                    console.print("[yellow]⚠ Изменения сохранены в stash, но обновление не удалось[/yellow]")
+                    console.print("[cyan]💡 Восстановите: git stash pop[/cyan]")
                 return False
     except subprocess.TimeoutExpired:
         console.print("[red]❌ Таймаут при обновлении[/red]")
