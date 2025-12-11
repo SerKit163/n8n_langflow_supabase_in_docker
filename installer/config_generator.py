@@ -51,6 +51,18 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
     langflow_enabled = config.get('langflow_enabled', True)
     # Supabase всегда включен
     
+    # Настраиваем CORS для Langflow
+    # Если есть домен, используем его с протоколом, иначе *
+    if langflow_enabled and langflow_domain and routing_mode == 'subdomain' and letsencrypt_email:
+        # Используем домен с HTTPS и HTTP
+        langflow_cors_origins = f"https://{langflow_domain},http://{langflow_domain}"
+    elif langflow_enabled and langflow_domain:
+        # Используем домен с HTTP
+        langflow_cors_origins = f"http://{langflow_domain}"
+    else:
+        # Используем * для локальной разработки
+        langflow_cors_origins = '*'
+    
     # Для отключенных сервисов используем пустые значения или значения по умолчанию только если включены
     # Заменяем переменные
     replacements = {
@@ -92,6 +104,7 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'N8N_PROTOCOL': n8n_protocol if n8n_enabled else '',
         'WEBHOOK_URL': webhook_url if n8n_enabled else '',
         'SUPABASE_PUBLIC_URL': supabase_public_url,
+        'LANGFLOW_CORS_ORIGINS': langflow_cors_origins if langflow_enabled else '*',
         # Переменные для nginx-proxy (заполняются только если routing_mode=subdomain и домены указаны)
         'VIRTUAL_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_enabled else '',
         'LETSENCRYPT_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_enabled and n8n_domain and letsencrypt_email else '',
