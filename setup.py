@@ -434,13 +434,13 @@ def select_services() -> dict:
     # Выбор n8n
     services_selection['n8n_enabled'] = Confirm.ask(
         "\n[cyan]Установить N8N?[/cyan] (автоматизация рабочих процессов)",
-        default=False
+        default=True
     )
     
     # Выбор Langflow
     services_selection['langflow_enabled'] = Confirm.ask(
         "[cyan]Установить Langflow?[/cyan] (визуальный конструктор ИИ агентов)",
-        default=False
+        default=True
     )
     
     # Показываем выбранные сервисы
