@@ -99,7 +99,15 @@ def check_updates(current_versions: Dict[str, str]) -> Dict[str, Dict]:
         latest = get_latest_version(image)
         
         if latest:
-            has_update = current != latest and latest != 'latest'
+            # Для 'latest' тегов не показываем обновления, так как они всегда актуальны
+            # Показываем обновления только если текущая версия не 'latest' и не совпадает с последней
+            if current == 'latest' and latest == 'latest':
+                has_update = False  # Уже на latest
+            elif current != latest:
+                has_update = True
+            else:
+                has_update = False
+            
             updates[service] = {
                 'current': current,
                 'latest': latest,
