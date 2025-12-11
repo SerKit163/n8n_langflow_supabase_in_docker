@@ -15,8 +15,9 @@ def generate_secret_key(length: int = 64) -> str:
 
 
 def generate_password(length: int = 32) -> str:
-    """Генерирует безопасный пароль"""
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    """Генерирует безопасный пароль (без символа $ чтобы избежать предупреждений Docker Compose)"""
+    # Исключаем $ из алфавита, чтобы избежать предупреждений Docker Compose о неопределенных переменных
+    alphabet = string.ascii_letters + string.digits + "!@#%^&*"
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
