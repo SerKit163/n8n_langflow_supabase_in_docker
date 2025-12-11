@@ -88,6 +88,7 @@ def update_from_github():
     # Проверяем есть ли изменения
     has_changes = False
     changed_files = []
+    choice = None
     try:
         result = subprocess.run(
             ['git', 'status', '--porcelain'],
@@ -108,6 +109,7 @@ def update_from_github():
             console.print("2. Отменить изменения (будет потеряно)")
             console.print("3. Отменить обновление")
             
+            from rich.prompt import Prompt
             choice = Prompt.ask(
                 "Выберите действие",
                 choices=["1", "2", "3"],
