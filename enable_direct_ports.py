@@ -38,40 +38,58 @@ def enable_ports_for_service(content, service_name, port_env_var, default_port):
         port = default_port
         console.print(f"[yellow]⚠ Порт для {service_name} не найден в .env, используем {default_port}[/yellow]")
     
-    # Ищем блок сервиса с закомментированными портами
-    # Паттерн для поиска: сервис -> комментарий о портах -> закомментированные ports
-    pattern = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "[^"]+":(\d+)'
+    # Определяем внутренний порт (обычно такой же как внешний для этих сервисов)
+    internal_port = default_port
     
-    def replace_func(match):
-        indent = match.group(2)
-        internal_port = match.group(5) if match.group(5) else default_port
-        return f'{match.group(1)}{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{port}:{internal_port}"'
+    # Ищем блок сервиса - ищем место после environment, перед deploy
+    # Паттерн 1: стандартный случай с комментарием и закомментированными ports
+    pattern1 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "[^"]+":(\d+)'
     
-    new_content = re.sub(pattern, replace_func, content, flags=re.MULTILINE)
+    def replace_func1(match):
+        indent = match.group(2)  # Отступ для комментария
+        indent2 = match.group(3)  # Отступ для ports:
+        indent3 = match.group(4)  # Отступ для строки с портом
+        found_internal = match.group(5) if match.group(5) else str(internal_port)
+        return f'{match.group(1)}{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent2}ports:\n{indent3}  - "{port}:{found_internal}"'
+    
+    new_content = re.sub(pattern1, replace_func1, content, flags=re.MULTILINE)
     
     if new_content != content:
         console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
         return new_content
-    else:
-        # Попробуем найти уже существующий блок ports (закомментированный)
-        pattern2 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)#.*[пп]орт.*\n(\s+)#\s+ports:\n(\s+)#\s+- "[^"]+":(\d+)'
-        new_content = re.sub(pattern2, replace_func, content, flags=re.MULTILINE)
-        
-        if new_content == content:
-            # Если не нашли, добавляем секцию ports после environment
-            pattern3 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+deploy:)'
-            def add_ports_func(match):
-                indent = match.group(2)
-                return f'{match.group(1)}{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{port}:{default_port}"\n{match.group(2)}deploy:'
-            new_content = re.sub(pattern3, add_ports_func, content, flags=re.MULTILINE)
-        
-        if new_content != content:
-            console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
-        else:
-            console.print(f"[yellow]⚠ Не удалось автоматически включить порт для {service_name}[/yellow]")
-            console.print(f"[cyan]💡 Вручную раскомментируйте секцию ports в docker-compose.yml для {service_name}[/cyan]")
-        
+    
+    # Паттерн 2: если ports уже есть, но закомментирован в другом формате
+    pattern2 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)#.*[пп]орт.*\n(\s+)#\s+ports:\n(\s+)#\s+- "[^"]+":(\d+)'
+    new_content = re.sub(pattern2, replace_func1, content, flags=re.MULTILINE)
+    
+    if new_content != content:
+        console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
         return new_content
+    
+    # Паттерн 3: если нет секции ports вообще, добавляем после environment
+    # Ищем место после последней строки environment, перед deploy
+    pattern3 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)(deploy:)'
+    
+    def add_ports_func(match):
+        # Находим отступ из предыдущих строк
+        lines_before = match.group(1).split('\n')
+        # Берем отступ из последней строки перед deploy
+        last_line = [l for l in lines_before if l.strip() and not l.strip().startswith('#')][-1] if lines_before else ''
+        indent = ' ' * (len(last_line) - len(last_line.lstrip())) if last_line else '    '
+        return f'{match.group(1)}{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{port}:{internal_port}"\n{indent}{match.group(3)}'
+    
+    new_content = re.sub(pattern3, add_ports_func, content, flags=re.MULTILINE)
+    
+    if new_content != content:
+        console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
+        return new_content
+    
+    # Если ничего не сработало
+    console.print(f"[yellow]⚠ Не удалось автоматически включить порт для {service_name}[/yellow]")
+    console.print(f"[cyan]💡 Вручную добавьте в docker-compose.yml для {service_name}:[/cyan]")
+    console.print(f"   ports:")
+    console.print(f'     - "{port}:{internal_port}"')
+    return content
 
 
 def main():
