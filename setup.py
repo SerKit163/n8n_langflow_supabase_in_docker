@@ -310,6 +310,24 @@ def configure_domains(routing_mode: str, ollama_available: bool = False, service
                     break
                 else:
                     console.print(f"[red]❌ {error}[/red]")
+            
+            # Выбор между production и staging
+            console.print("\n[cyan]🔐 Режим SSL сертификатов:[/cyan]")
+            console.print("[yellow]💡 Production - для продакшена (доверяются браузерами)[/yellow]")
+            console.print("[yellow]💡 Staging - для тестирования (более высокие лимиты, НЕ доверяются браузерами)[/yellow]\n")
+            
+            use_staging = Confirm.ask(
+                "Использовать Let's Encrypt Staging? (для тестирования)",
+                default=False
+            )
+            
+            if use_staging:
+                domains_config['letsencrypt_staging'] = True
+                console.print("[yellow]⚠ Staging сертификаты НЕ доверяются браузерами![/yellow]")
+                console.print("[yellow]⚠ Используйте только для тестирования конфигурации[/yellow]")
+            else:
+                domains_config['letsencrypt_staging'] = False
+                console.print("[green]✓ Используется Let's Encrypt Production[/green]")
     
     elif routing_mode == 'path':
         console.print("\n[bold cyan]📝 КОНФИГУРАЦИЯ СИСТЕМЫ:[/bold cyan]")

@@ -79,6 +79,7 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'SUPABASE_PATH': config.get('supabase_path', '/supabase'),
         'OLLAMA_PATH': config.get('ollama_path', '/ollama') if ollama_enabled else '',
         'LETSENCRYPT_EMAIL': letsencrypt_email,
+        'LETSENCRYPT_STAGING': 'true' if config.get('letsencrypt_staging', False) else 'false',
         'N8N_PORT': str(config.get('n8n_port', 5678)) if n8n_enabled else '',
         'LANGFLOW_PORT': str(config.get('langflow_port', 7860)) if langflow_enabled else '',
         'SUPABASE_PORT': str(config.get('supabase_port', 8000)),
@@ -493,6 +494,7 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     
     routing_mode = config.get('routing_mode', '')
     letsencrypt_email = config.get('letsencrypt_email', '') or ''
+    letsencrypt_staging = config.get('letsencrypt_staging', False)
     
     # Проверяем какие сервисы включены (по умолчанию False для безопасности)
     n8n_enabled = config.get('n8n_enabled', False)
@@ -557,6 +559,32 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
         # Удаляем блок basic_auth для Supabase Studio
         basicauth_pattern = r'    basic_auth \{[^}]*\{SUPABASE_ADMIN_LOGIN\}[^}]*\{SUPABASE_ADMIN_PASSWORD_HASH\}[^}]*\}\n'
         content = re.sub(basicauth_pattern, '', content)
+    
+    # Добавляем acme_ca для staging если выбрано
+    if letsencrypt_staging:
+        # Ищем глобальный блок и добавляем staging acme_ca
+        global_block_pattern = r'(\{\s*\n\s*email\s+\{[^}]+\}\s*\n?)(.*?)(\})'
+        
+        def add_staging_acme(match):
+            email_line = match.group(1)  # "    email {CADDY_EMAIL}\n"
+            rest = match.group(2)  # остальное содержимое
+            footer = match.group(3)  # "}"
+            
+            # Удаляем старые acme_ca если есть
+            rest = re.sub(r'\s+acme_ca\s+[^\n]+\n?', '', rest)
+            rest = re.sub(r'\s+# Let\'s Encrypt.*?\n', '', rest, flags=re.MULTILINE)
+            rest = re.sub(r'\s+# Caddy автоматически.*?\n', '', rest, flags=re.MULTILINE)
+            
+            # Добавляем staging
+            staging_config = '    # Let\'s Encrypt Staging - для тестирования (более высокие лимиты)\n'
+            staging_config += '    # ⚠ Staging сертификаты НЕ доверяются браузерами!\n'
+            staging_config += '    acme_ca https://acme-staging-v02.api.letsencrypt.org/directory\n'
+            staging_config += '    # Caddy автоматически перенаправляет HTTP на HTTPS\n'
+            
+            rest = staging_config + rest
+            return f"{email_line}{rest}{footer}"
+        
+        content = re.sub(global_block_pattern, add_staging_acme, content, flags=re.DOTALL)
     
     # Заменяем переменные (только для включенных сервисов)
     replacements = {
