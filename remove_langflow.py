@@ -132,7 +132,23 @@ def stop_and_remove_langflow(remove_volume=True):
     
 
 
-def remove_langflow_image():
+def get_image_size(image_name: str) -> str:
+    """Получает размер образа Docker"""
+    try:
+        result = subprocess.run(
+            ["docker", "images", "--format", "{{.Size}}", image_name],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.stdout.strip():
+            return result.stdout.strip().split('\n')[0]
+        return "неизвестно"
+    except Exception:
+        return "неизвестно"
+
+
+def remove_langflow_image(ask_confirmation: bool = True):
     """Удаляет неиспользуемый образ Langflow"""
     try:
         console.print("\n[cyan]🖼️  Проверка образа Langflow...[/cyan]")
@@ -153,8 +169,21 @@ def remove_langflow_image():
                     timeout=10
                 )
                 if not check_result.stdout.strip():
-                    # Образ не используется, удаляем
-                    console.print(f"Удаление неиспользуемого образа {image}...")
+                    # Образ не используется
+                    image_size = get_image_size(image)
+                    console.print(f"[yellow]Найден неиспользуемый образ: {image} (размер: {image_size})[/yellow]")
+                    
+                    # Спрашиваем пользователя
+                    if ask_confirmation:
+                        if not Confirm.ask(
+                            f"\nУдалить образ {image} для освобождения места на диске ({image_size})?",
+                            default=True
+                        ):
+                            console.print("[yellow]⚠️  Образ не удален (можно удалить позже: docker rmi {image})[/yellow]")
+                            return
+                    
+                    # Удаляем образ
+                    console.print(f"Удаление образа {image}...")
                     rm_result = subprocess.run(
                         ["docker", "rmi", "-f", image],
                         capture_output=True,
@@ -162,7 +191,7 @@ def remove_langflow_image():
                         timeout=60
                     )
                     if rm_result.returncode == 0:
-                        console.print(f"[green]✓ Образ {image} удален (освобождено ~15GB)[/green]")
+                        console.print(f"[green]✓ Образ {image} удален (освобождено {image_size})[/green]")
                     else:
                         console.print(f"[yellow]⚠️  Не удалось удалить образ {image}: {rm_result.stderr}[/yellow]")
                 else:
@@ -389,7 +418,7 @@ def main():
         sys.exit(1)
     
     # Удаляем неиспользуемый образ Langflow (всегда, независимо от наличия контейнера)
-    remove_langflow_image()
+    remove_langflow_image(ask_confirmation=True)
     
     # Перезапускаем сервисы
     restart_services()

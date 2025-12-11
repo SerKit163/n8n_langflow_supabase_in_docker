@@ -350,7 +350,7 @@ def main():
         sys.exit(1)
     
     # Удаляем неиспользуемый образ Ollama (всегда, независимо от наличия контейнера)
-    remove_ollama_image()
+    remove_ollama_image(ask_confirmation=True)
     
     # Перезапускаем сервисы
     restart_services()
