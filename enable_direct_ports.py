@@ -47,41 +47,69 @@ def enable_ports_for_service(content, service_name, port_env_var, default_port):
     # Определяем внутренний порт (обычно такой же как внешний для этих сервисов)
     internal_port = default_port
     
-    # Ищем блок сервиса - от начала сервиса до следующей секции (deploy, volumes, networks)
-    # Паттерн: находим весь блок сервиса до следующей секции
-    pattern = rf'(\s+{service_name}:[^\n]*\n)((?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)(deploy:|volumes:|networks:|restart:)'
+    # Проверяем, есть ли уже незакомментированная секция ports
+    if re.search(rf'^\s+{service_name}:[^\n]*\n(?:[^\n]*\n)*?\s+ports:\s*$', content, re.MULTILINE):
+        console.print(f"[cyan]ℹ Секция ports уже существует для {service_name}, пропускаем[/cyan]")
+        return content
     
-    def replace_func(match):
-        service_header = match.group(1)  # "  n8n:\n"
-        service_body = match.group(2)  # Все что между заголовком и следующей секцией
-        indent = match.group(3)  # Отступ (обычно 4 пробела)
-        next_section = match.group(4)  # "deploy:" или другая секция
+    # Паттерн 1: стандартный формат с комментарием "ВАЖНО: Не открываем порт..."
+    pattern1 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "[^"]+":(\d+)'
+    
+    def replace_commented_ports1(match):
+        before_comment = match.group(1)
+        indent = match.group(2)
+        indent2 = match.group(3)
+        indent3 = match.group(4)
+        internal_port_found = match.group(5)
         
-        # Проверяем, есть ли уже незакомментированная секция ports
-        if re.search(rf'^{indent}ports:', service_body, re.MULTILINE):
-            # Порты уже есть, пропускаем
-            return match.group(0)
+        # Используем найденный внутренний порт или дефолтный
+        internal = internal_port_found if internal_port_found else internal_port
         
-        # Удаляем все закомментированные секции ports
-        service_body = re.sub(
-            rf'{indent}#.*[пп]орт.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?',
-            '',
-            service_body,
-            flags=re.MULTILINE | re.IGNORECASE
-        )
-        service_body = re.sub(
-            rf'{indent}# ВАЖНО:.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?',
-            '',
-            service_body,
-            flags=re.MULTILINE | re.IGNORECASE
-        )
+        ports_section = f'{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent2}ports:\n{indent3}  - "{port}:{internal}"\n'
         
-        # Добавляем секцию ports перед следующей секцией
+        return f'{before_comment}{ports_section}'
+    
+    new_content = re.sub(pattern1, replace_commented_ports1, content, flags=re.MULTILINE)
+    
+    if new_content != content:
+        console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
+        return new_content
+    
+    # Паттерн 2: любой закомментированный блок ports
+    pattern2 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)#.*[пп]орт.*\n(\s+)#\s+ports:\n(\s+)#\s+- "[^"]+":(\d+)'
+    
+    def replace_commented_ports2(match):
+        before_comment = match.group(1)
+        indent = match.group(2)
+        indent2 = match.group(3)
+        indent3 = match.group(4)
+        internal_port_found = match.group(5)
+        
+        internal = internal_port_found if internal_port_found else internal_port
+        
+        ports_section = f'{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent2}ports:\n{indent3}  - "{port}:{internal}"\n'
+        
+        return f'{before_comment}{ports_section}'
+    
+    new_content = re.sub(pattern2, replace_commented_ports2, content, flags=re.MULTILINE)
+    
+    if new_content != content:
+        console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
+        return new_content
+    
+    # Паттерн 3: вставляем перед deploy (если закомментированных портов нет)
+    pattern3 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)(deploy:)'
+    
+    def insert_before_deploy(match):
+        before_deploy = match.group(1)
+        indent = match.group(2)
+        deploy_section = match.group(3)
+        
         ports_section = f'{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{port}:{internal_port}"\n'
         
-        return f'{service_header}{service_body}{ports_section}{indent}{next_section}'
+        return f'{before_deploy}{ports_section}{indent}{deploy_section}'
     
-    new_content = re.sub(pattern, replace_func, content, flags=re.MULTILINE)
+    new_content = re.sub(pattern3, insert_before_deploy, content, flags=re.MULTILINE)
     
     if new_content != content:
         console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
