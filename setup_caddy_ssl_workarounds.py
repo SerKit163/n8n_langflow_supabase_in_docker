@@ -19,20 +19,29 @@ def setup_dns_challenge_cloudflare():
     """Настройка DNS challenge через Cloudflare"""
     console.print("\n[cyan]🔧 Настройка DNS Challenge через Cloudflare[/cyan]")
     console.print("[yellow]Это позволит обойти HTTP-01 проверку и лимиты Let's Encrypt[/yellow]")
+    console.print("[dim]⚠ ОПЦИОНАЛЬНО: Нужно только если используете Cloudflare DNS[/dim]")
     
     use_cloudflare = Confirm.ask("Используете Cloudflare для ваших доменов?", default=False)
     
     if not use_cloudflare:
+        console.print("[cyan]ℹ Пропускаем настройку Cloudflare (не обязательно)[/cyan]")
         return None
     
+    console.print("\n[yellow]💡 Как получить Cloudflare API Token:[/yellow]")
+    console.print("1. Зайдите в Cloudflare Dashboard → My Profile → API Tokens")
+    console.print("2. Create Token → Permissions: Zone → DNS → Edit")
+    console.print("3. Zone Resources: Include → All zones")
+    console.print("4. Скопируйте токен\n")
+    
     cloudflare_token = Prompt.ask(
-        "Введите Cloudflare API Token",
+        "Введите Cloudflare API Token (или нажмите Enter чтобы пропустить)",
         default="",
         password=True
     )
     
     if not cloudflare_token:
         console.print("[yellow]⚠ API Token не указан, пропускаем настройку Cloudflare[/yellow]")
+        console.print("[cyan]ℹ Это нормально - ротация email работает без Cloudflare[/cyan]")
         return None
     
     return {
@@ -91,6 +100,8 @@ def setup_tls_on_demand():
     """Настройка TLS on Demand для автоматического выпуска сертификатов"""
     console.print("\n[cyan]⚡ Настройка TLS on Demand[/cyan]")
     console.print("[yellow]Автоматический выпуск сертификатов при первом обращении к домену[/yellow]")
+    console.print("[dim]⚠ ОПЦИОНАЛЬНО: Нужно только для 100+ доменов[/dim]")
+    console.print("[dim]   Для 3-5 доменов не требуется[/dim]")
     
     use_on_demand = Confirm.ask(
         "Включить TLS on Demand? (полезно для большого количества доменов)",
@@ -98,15 +109,21 @@ def setup_tls_on_demand():
     )
     
     if not use_on_demand:
+        console.print("[cyan]ℹ Пропускаем TLS on Demand (не обязательно для вашего случая)[/cyan]")
         return None
     
+    console.print("\n[yellow]💡 TLS on Demand требует API endpoint для проверки доменов[/yellow]")
+    console.print("[dim]Пример: http://api.example.com/check?domain=example.com[/dim]")
+    console.print("[dim]API должен возвращать 200 если домен валиден[/dim]\n")
+    
     api_url = Prompt.ask(
-        "URL API для проверки валидности домена (например: http://api.example.com/check)",
+        "URL API для проверки валидности домена (или Enter чтобы пропустить)",
         default=""
     )
     
     if not api_url:
         console.print("[yellow]⚠ API URL не указан, TLS on Demand будет отключен[/yellow]")
+        console.print("[cyan]ℹ Это нормально - для вашего случая не требуется[/cyan]")
         return None
     
     return {
@@ -251,13 +268,17 @@ from dotenv import load_dotenv
 # Загружаем переменные из .env
 load_dotenv()
 
-CADDY_API = "http://localhost:2019/config/apps/http/servers/srv0/listen/0/tls/connection_policies/0/certificates/management/issuers/0/acme/email"
+# Путь к файлу индекса (в директории проекта для надежности)
+PROJECT_DIR = Path(__file__).parent if '__file__' in globals() else Path.cwd()
+INDEX_FILE = PROJECT_DIR / ".caddy_email_index.txt"
+
 EMAIL_PREFIX = os.getenv("CADDY_EMAIL_PREFIX", "{email_rotation['email_prefix']}")
 EMAIL_DOMAIN = os.getenv("CADDY_EMAIL_DOMAIN", "{email_rotation['email_domain']}")
 EMAIL_COUNT = int(os.getenv("CADDY_EMAIL_COUNT", "{email_rotation['num_accounts']}"))
 
-# Файл для хранения текущего индекса
-INDEX_FILE = Path("/tmp/caddy_email_index.txt")
+# Caddy API endpoint для изменения email
+# Используем более простой путь через admin API
+CADDY_API_BASE = os.getenv("CADDY_API", "http://localhost:2019")
 
 def get_current_index():
     \"\"\"Получает текущий индекс email из файла\"\"\"
@@ -280,22 +301,47 @@ def rotate_email():
     new_email = f"{{EMAIL_PREFIX}}{{next_index}}@{{EMAIL_DOMAIN}}"
     
     try:
-        # Обновляем email через Caddy API
-        response = requests.put(
-            CADDY_API,
-            json=new_email,
-            timeout=5
-        )
+        # Получаем текущую конфигурацию Caddy
+        config_url = f"{{CADDY_API_BASE}}/config/"
+        response = requests.get(config_url, timeout=5)
         
-        if response.status_code == 200:
+        if response.status_code != 200:
+            print(f"[{{datetime.now()}}] ⚠ Не удалось подключиться к Caddy API (код: {{response.status_code}})")
+            print(f"[{{datetime.now()}}] 💡 Убедитесь, что Caddy запущен и доступен на порту 2019")
+            return False
+        
+        # Обновляем email в глобальной секции
+        # Путь к email в конфигурации: apps.http.servers.srv0.listen[0].tls.connection_policies[0].certificates.management.issuers[0].acme.email
+        email_path = "apps/http/servers/srv0/listen/0/tls/connection_policies/0/certificates/management/issuers/0/acme/email"
+        
+        # Пробуем обновить через PATCH
+        patch_url = f"{{CADDY_API_BASE}}/config/{{email_path}}"
+        patch_response = requests.patch(patch_url, json=new_email, timeout=5)
+        
+        if patch_response.status_code in [200, 204]:
             set_current_index(next_index)
-            print(f"[{{datetime.now()}}] Email изменен на: {{new_email}}")
+            print(f"[{{datetime.now()}}] ✓ Email изменен на: {{new_email}}")
             return True
         else:
-            print(f"[{{datetime.now()}}] Ошибка при изменении email: {{response.status_code}}")
-            return False
+            # Если PATCH не работает, пробуем через PUT
+            put_url = f"{{CADDY_API_BASE}}/config/{{email_path}}"
+            put_response = requests.put(put_url, json=new_email, timeout=5)
+            
+            if put_response.status_code in [200, 204]:
+                set_current_index(next_index)
+                print(f"[{{datetime.now()}}] ✓ Email изменен на: {{new_email}}")
+                return True
+            else:
+                print(f"[{{datetime.now()}}] ⚠ Ошибка при изменении email (PATCH: {{patch_response.status_code}}, PUT: {{put_response.status_code}})")
+                print(f"[{{datetime.now()}}] 💡 Возможно, нужно перезапустить Caddy или проверить конфигурацию")
+                return False
+                
+    except requests.exceptions.ConnectionError:
+        print(f"[{{datetime.now()}}] ⚠ Не удалось подключиться к Caddy API")
+        print(f"[{{datetime.now()}}] 💡 Убедитесь, что Caddy запущен: docker-compose ps caddy")
+        return False
     except Exception as e:
-        print(f"[{{datetime.now()}}] Ошибка: {{e}}")
+        print(f"[{{datetime.now()}}] ⚠ Ошибка: {{e}}")
         return False
 
 if __name__ == "__main__":
@@ -306,9 +352,47 @@ if __name__ == "__main__":
     script_path.write_text(script_content, encoding='utf-8')
     script_path.chmod(0o755)
     
+    # Получаем абсолютный путь для cron
+    abs_script_path = script_path.resolve()
+    
     console.print(f"[green]✓ Создан скрипт ротации email: {script_path}[/green]")
-    console.print("[cyan]💡 Добавьте в crontab для автоматической ротации каждые 20 минут:[/cyan]")
-    console.print("   */20 * * * * /usr/bin/python3 /path/to/caddy_rotate_email.py")
+    console.print(f"[green]✓ Абсолютный путь: {abs_script_path}[/green]")
+    
+    # Предлагаем автоматически добавить в cron
+    if Confirm.ask("\n[cyan]Добавить скрипт в crontab автоматически?[/cyan]", default=True):
+        import subprocess
+        cron_line = f"*/20 * * * * cd {abs_script_path.parent} && /usr/bin/python3 {abs_script_path.name}\n"
+        
+        try:
+            # Получаем текущий crontab
+            result = subprocess.run(['crontab', '-l'], capture_output=True, text=True, check=False)
+            existing_crontab = result.stdout if result.returncode == 0 else ""
+            
+            # Проверяем, есть ли уже эта строка
+            if abs_script_path.name in existing_crontab or 'caddy_rotate_email' in existing_crontab:
+                console.print("[yellow]⚠ Запись уже есть в crontab[/yellow]")
+            else:
+                # Добавляем новую строку
+                new_crontab = existing_crontab
+                if new_crontab and not new_crontab.endswith('\n'):
+                    new_crontab += '\n'
+                new_crontab += cron_line
+                
+                # Устанавливаем новый crontab
+                process = subprocess.run(['crontab', '-'], input=new_crontab, text=True, check=True, capture_output=True)
+                console.print("[green]✓ Скрипт добавлен в crontab![/green]")
+                console.print("[cyan]   Ротация email будет происходить каждые 20 минут[/cyan]")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[yellow]⚠ Не удалось автоматически добавить в crontab: {e}[/yellow]")
+            console.print("[cyan]Добавьте вручную:[/cyan]")
+        except Exception as e:
+            console.print(f"[yellow]⚠ Ошибка: {e}[/yellow]")
+            console.print("[cyan]Добавьте вручную:[/cyan]")
+    else:
+        console.print("\n[cyan]💡 Добавьте в crontab вручную для автоматической ротации каждые 20 минут:[/cyan]")
+    
+    console.print(f"   [bold]crontab -e[/bold]")
+    console.print(f"   [bold]*/20 * * * * cd {abs_script_path.parent} && /usr/bin/python3 {abs_script_path.name}[/bold]")
 
 def main():
     """Главная функция"""
@@ -343,20 +427,54 @@ def main():
     
     console.print("\n[bold green]✅ Настройка завершена![/bold green]")
     
+    # Показываем что настроено
+    console.print("\n[cyan]📋 Что настроено:[/cyan]")
+    if email_rotation and email_rotation.get('enabled'):
+        console.print(f"  ✓ Ротация email: {email_rotation['num_accounts']} аккаунтов")
+        console.print(f"    → До {email_rotation['num_accounts'] * 300} сертификатов/3 часа")
+    else:
+        console.print("  ⚠ Ротация email: не настроена")
+    
+    if cloudflare_config and cloudflare_config.get('enabled'):
+        console.print("  ✓ Cloudflare DNS Challenge: настроен")
+    else:
+        console.print("  ℹ Cloudflare DNS Challenge: не настроен (не обязательно)")
+    
+    if tls_on_demand and tls_on_demand.get('enabled'):
+        console.print("  ✓ TLS on Demand: настроен")
+    else:
+        console.print("  ℹ TLS on Demand: не настроен (не обязательно для вашего случая)")
+    
+    console.print("  ✓ ZeroSSL fallback: автоматически (встроен в Caddy)")
+    
     console.print("\n[cyan]💡 Следующие шаги:[/cyan]")
-    console.print("1. Если используете Cloudflare DNS challenge:")
-    console.print("   - Установите модуль: xcaddy build --with github.com/caddy-dns/cloudflare")
-    console.print("   - Или используйте образ: caddy:builder")
-    console.print("2. Если включена ротация email:")
-    console.print("   - Добавьте скрипт в crontab: */20 * * * * /path/to/caddy_rotate_email.py")
-    console.print("3. Перегенерируйте Caddyfile: python3 regenerate_caddyfile.py")
-    console.print("4. Перезапустите Caddy: docker-compose restart caddy")
+    
+    if email_rotation and email_rotation.get('enabled'):
+        console.print("\n[bold yellow]1. Настройте автоматическую ротацию email:[/bold yellow]")
+        script_path = Path("caddy_rotate_email.py")
+        if script_path.exists():
+            abs_path = script_path.resolve()
+            console.print(f"   [green]crontab -e[/green]")
+            console.print(f"   [green]*/20 * * * * cd {abs_path.parent} && /usr/bin/python3 {abs_path.name}[/green]")
+        else:
+            console.print("   Скрипт caddy_rotate_email.py должен быть создан")
+    
+    if cloudflare_config and cloudflare_config.get('enabled'):
+        console.print("\n[bold yellow]2. Настройте Cloudflare DNS Challenge:[/bold yellow]")
+        console.print("   - Установите модуль: xcaddy build --with github.com/caddy-dns/cloudflare")
+        console.print("   - Или используйте образ: caddy:builder")
+    
+    console.print("\n[bold yellow]3. Примените изменения:[/bold yellow]")
+    console.print("   [green]python3 regenerate_caddyfile.py[/green]")
+    console.print("   [green]docker-compose restart caddy[/green]")
     
     console.print("\n[yellow]⚠ Важно:[/yellow]")
     console.print("- Let's Encrypt лимит: 300 сертификатов/3 часа на аккаунт")
+    if email_rotation and email_rotation.get('enabled'):
+        console.print(f"- С ротацией email: до {email_rotation['num_accounts'] * 300} сертификатов/3 часа")
     console.print("- Максимум 10 аккаунтов с одного IP = 3000 сертификатов/3 часа")
     console.print("- Caddy автоматически использует ZeroSSL как fallback")
-    console.print("- DNS Challenge позволяет обойти HTTP-01 проверку")
+    console.print("- Cloudflare DNS Challenge опционален (нужен только если используете Cloudflare)")
 
 if __name__ == "__main__":
     main()
