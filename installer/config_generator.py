@@ -103,9 +103,35 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'LETSENCRYPT_HOST_OLLAMA': ollama_domain if routing_mode == 'subdomain' and ollama_enabled and ollama_domain and letsencrypt_email else '',
     }
     
+    # Функция для экранирования значений, которые могут содержать специальные символы Docker Compose
+    def escape_docker_value(value: str) -> str:
+        """
+        Экранирует специальные символы в значениях для Docker Compose
+        Экранирует $ как $$ чтобы предотвратить интерпретацию как переменной
+        """
+        if not isinstance(value, str):
+            value = str(value)
+        # Экранируем $ как $$ (Docker Compose синтаксис для экранирования)
+        # Это предотвратит интерпретацию подстрок вида ${something} как переменных
+        # Заменяем все $ на $$, кроме тех, которые уже экранированы ($$)
+        import re
+        # Экранируем $ которые не являются частью уже экранированного $$
+        # Паттерн: $ который не предшествует другому $
+        value = re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
+        return value
+    
     # Заменяем все переменные в шаблоне
+    # Для секретов и паролей экранируем специальные символы
+    secret_keys = ['POSTGRES_PASSWORD', 'SUPABASE_ADMIN_PASSWORD', 'JWT_SECRET', 
+                   'ANON_KEY', 'SERVICE_ROLE_KEY', 'SUPABASE_ADMIN_PASSWORD_HASH']
+    
     for key, value in replacements.items():
-        content = content.replace(f'{{{key}}}', str(value))
+        # Экранируем секреты и пароли
+        if key in secret_keys:
+            escaped_value = escape_docker_value(str(value))
+            content = content.replace(f'{{{key}}}', escaped_value)
+        else:
+            content = content.replace(f'{{{key}}}', str(value))
     
     write_file(output_path, content)
 
