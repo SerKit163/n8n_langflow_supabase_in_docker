@@ -27,9 +27,13 @@ def check_resources(hardware: Dict, config: Dict) -> tuple[bool, List[str], List
     total_ram = hardware['ram']['total_gb']
     available_ram = hardware['ram']['available_gb']
     
+    # Небольшая погрешность для сравнения чисел с плавающей точкой (0.1 GB)
+    # Это позволяет избежать ложных срабатываний из-за округления
+    epsilon = 0.1
+    
     # Проверяем только минимальные требования (без запаса)
-    # Критическая ошибка только если требуемая RAM превышает общую RAM VPS
-    if required_ram > total_ram:
+    # Критическая ошибка только если требуемая RAM строго превышает общую RAM VPS
+    if required_ram > total_ram + epsilon:
         errors.append(
             f"❌ Недостаточно RAM на VPS!\n"
             f"   Требуется: {required_ram:.1f} GB\n"
