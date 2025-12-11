@@ -34,8 +34,15 @@ def fix_docker_compose():
     
     for service_name, external_port, internal_port in services:
         # Проверяем, есть ли уже незакомментированная секция ports
-        if re.search(rf'^\s+{service_name}:[^\n]*\n(?:[^\n]*\n)*?\s+ports:\s*$', content, re.MULTILINE):
+        ports_pattern = rf'^\s+{service_name}:[^\n]*\n(?:[^\n]*\n)*?\s+ports:\s*$'
+        if re.search(ports_pattern, content, re.MULTILINE):
             console.print(f"[cyan]ℹ Секция ports уже существует для {service_name}, пропускаем[/cyan]")
+            continue
+        
+        # Проверяем, существует ли сервис в файле
+        service_exists = re.search(rf'^\s+{service_name}:', content, re.MULTILINE)
+        if not service_exists:
+            console.print(f"[yellow]⚠ Сервис {service_name} не найден в docker-compose.yml[/yellow]")
             continue
         
         # Ищем место для вставки: после environment (для n8n) или после user (для langflow), перед deploy
