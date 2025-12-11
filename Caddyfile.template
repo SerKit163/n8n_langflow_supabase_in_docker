@@ -6,23 +6,18 @@
 # N8N
 {N8N_DOMAIN} {
     reverse_proxy n8n:5678 {
-        header_up X-Real-IP {http.request.remote.host}
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.scheme}
+        header_up Host {host}
     }
 }
 
 # Langflow
 {LANGFLOW_DOMAIN} {
     reverse_proxy langflow:7860 {
-        # Передаем заголовки для правильной работы прокси
+        # Передаем заголовок Host для правильной работы прокси
         header_up Host {host}
-        header_up X-Real-IP {http.request.remote.host}
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.scheme}
         
         # WebSocket поддержка для Langflow (Caddy автоматически обрабатывает WebSocket)
-        # Но явно передаем заголовки для совместимости
+        # Явно передаем заголовки для совместимости
         header_up Connection {http.request.header.Connection}
         header_up Upgrade {http.request.header.Upgrade}
         
@@ -30,8 +25,6 @@
         transport http {
             dial_timeout 30s
             response_header_timeout 120s
-            read_timeout 300s
-            write_timeout 300s
         }
     }
 }
@@ -42,9 +35,7 @@
         {SUPABASE_ADMIN_LOGIN} {SUPABASE_ADMIN_PASSWORD_HASH}
     }
     reverse_proxy supabase-studio:3000 {
-        header_up X-Real-IP {http.request.remote.host}
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Proto {http.request.scheme}
+        header_up Host {host}
     }
 }
 
