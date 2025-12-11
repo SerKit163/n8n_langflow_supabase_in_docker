@@ -24,6 +24,12 @@ def read_docker_compose():
 def write_docker_compose(content):
     """Записывает docker-compose.yml"""
     compose_path = Path("docker-compose.yml")
+    # Создаем резервную копию
+    backup_path = compose_path.with_suffix('.yml.backup')
+    if compose_path.exists():
+        backup_path.write_text(compose_path.read_text(encoding='utf-8'), encoding='utf-8')
+        console.print(f"[cyan]📋 Создана резервная копия: {backup_path.name}[/cyan]")
+    
     compose_path.write_text(content, encoding='utf-8')
     console.print("[green]✓ docker-compose.yml обновлен[/green]")
 
@@ -41,55 +47,48 @@ def enable_ports_for_service(content, service_name, port_env_var, default_port):
     # Определяем внутренний порт (обычно такой же как внешний для этих сервисов)
     internal_port = default_port
     
-    # Ищем блок сервиса - ищем место после environment, перед deploy
-    # Паттерн 1: стандартный случай с комментарием и закомментированными ports
-    pattern1 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "[^"]+":(\d+)'
+    # Ищем блок сервиса - от начала сервиса до следующей секции (deploy, volumes, networks)
+    # Паттерн: находим весь блок сервиса до следующей секции
+    pattern = rf'(\s+{service_name}:[^\n]*\n)((?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)(deploy:|volumes:|networks:|restart:)'
     
-    def replace_func1(match):
-        indent = match.group(2)  # Отступ для комментария
-        indent2 = match.group(3)  # Отступ для ports:
-        indent3 = match.group(4)  # Отступ для строки с портом
-        found_internal = match.group(5) if match.group(5) else str(internal_port)
-        return f'{match.group(1)}{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent2}ports:\n{indent3}  - "{port}:{found_internal}"'
+    def replace_func(match):
+        service_header = match.group(1)  # "  n8n:\n"
+        service_body = match.group(2)  # Все что между заголовком и следующей секцией
+        indent = match.group(3)  # Отступ (обычно 4 пробела)
+        next_section = match.group(4)  # "deploy:" или другая секция
+        
+        # Проверяем, есть ли уже незакомментированная секция ports
+        if re.search(rf'^{indent}ports:', service_body, re.MULTILINE):
+            # Порты уже есть, пропускаем
+            return match.group(0)
+        
+        # Удаляем все закомментированные секции ports
+        service_body = re.sub(
+            rf'{indent}#.*[пп]орт.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?',
+            '',
+            service_body,
+            flags=re.MULTILINE | re.IGNORECASE
+        )
+        service_body = re.sub(
+            rf'{indent}# ВАЖНО:.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?',
+            '',
+            service_body,
+            flags=re.MULTILINE | re.IGNORECASE
+        )
+        
+        # Добавляем секцию ports перед следующей секцией
+        ports_section = f'{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{port}:{internal_port}"\n'
+        
+        return f'{service_header}{service_body}{ports_section}{indent}{next_section}'
     
-    new_content = re.sub(pattern1, replace_func1, content, flags=re.MULTILINE)
-    
-    if new_content != content:
-        console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
-        return new_content
-    
-    # Паттерн 2: если ports уже есть, но закомментирован в другом формате
-    pattern2 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)#.*[пп]орт.*\n(\s+)#\s+ports:\n(\s+)#\s+- "[^"]+":(\d+)'
-    new_content = re.sub(pattern2, replace_func1, content, flags=re.MULTILINE)
-    
-    if new_content != content:
-        console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
-        return new_content
-    
-    # Паттерн 3: если нет секции ports вообще, добавляем после environment
-    # Ищем место после последней строки environment, перед deploy
-    pattern3 = rf'(\s+{service_name}:[^\n]*\n(?:(?!\s+deploy:)[^\n]*\n)*?)(\s+)(deploy:)'
-    
-    def add_ports_func(match):
-        # Находим отступ из предыдущих строк
-        lines_before = match.group(1).split('\n')
-        # Берем отступ из последней строки перед deploy
-        last_line = [l for l in lines_before if l.strip() and not l.strip().startswith('#')][-1] if lines_before else ''
-        indent = ' ' * (len(last_line) - len(last_line.lstrip())) if last_line else '    '
-        return f'{match.group(1)}{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{port}:{internal_port}"\n{indent}{match.group(3)}'
-    
-    new_content = re.sub(pattern3, add_ports_func, content, flags=re.MULTILINE)
+    new_content = re.sub(pattern, replace_func, content, flags=re.MULTILINE)
     
     if new_content != content:
         console.print(f"[green]✓ Порт {port} включен для {service_name}[/green]")
         return new_content
-    
-    # Если ничего не сработало
-    console.print(f"[yellow]⚠ Не удалось автоматически включить порт для {service_name}[/yellow]")
-    console.print(f"[cyan]💡 Вручную добавьте в docker-compose.yml для {service_name}:[/cyan]")
-    console.print(f"   ports:")
-    console.print(f'     - "{port}:{internal_port}"')
-    return content
+    else:
+        console.print(f"[yellow]⚠ Не удалось автоматически включить порт для {service_name}[/yellow]")
+        return content
 
 
 def main():
@@ -130,16 +129,43 @@ def main():
     # Сохраняем изменения
     write_docker_compose(content)
     
-    console.print("\n[bold green]✅ Готово![/bold green]")
-    console.print("\n[cyan]💡 Следующие шаги:[/cyan]")
-    console.print("1. Перезапустите сервисы: docker-compose up -d")
-    console.print("2. Сервисы будут доступны:")
-    console.print("   - Через Caddy (HTTPS): https://домен")
-    console.print("   - Напрямую (HTTP): http://localhost:ПОРТ")
-    console.print("\n[yellow]⚠ Внимание:[/yellow]")
-    console.print("- Прямой доступ через порты работает только по HTTP (без SSL)")
-    console.print("- Для продакшена рекомендуется использовать только Caddy (HTTPS)")
-    console.print("- Прямой доступ можно отключить, закомментировав секции ports в docker-compose.yml")
+    # Проверяем синтаксис YAML
+    console.print("\n[cyan]🔍 Проверка синтаксиса docker-compose.yml...[/cyan]")
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["docker-compose", "config"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            console.print("[green]✓ Синтаксис docker-compose.yml корректен[/green]")
+            console.print("\n[bold green]✅ Готово![/bold green]")
+            console.print("\n[cyan]💡 Следующие шаги:[/cyan]")
+            console.print("1. Перезапустите сервисы: docker-compose up -d")
+            console.print("2. Сервисы будут доступны:")
+            console.print("   - Через Caddy (HTTPS): https://домен")
+            console.print("   - Напрямую (HTTP): http://localhost:ПОРТ")
+            console.print("\n[yellow]⚠ Внимание:[/yellow]")
+            console.print("- Прямой доступ через порты работает только по HTTP (без SSL)")
+            console.print("- Для продакшена рекомендуется использовать только Caddy (HTTPS)")
+            console.print("- Прямой доступ можно отключить, закомментировав секции ports в docker-compose.yml")
+        else:
+            console.print("[red]❌ Ошибка синтаксиса в docker-compose.yml![/red]")
+            console.print(result.stderr)
+            console.print("\n[yellow]💡 Восстановите из резервной копии:[/yellow]")
+            console.print("   cp docker-compose.yml.backup docker-compose.yml")
+            console.print("\n[cyan]Или используйте скрипт исправления:[/cyan]")
+            console.print("   python3 fix_docker_compose_ports.py")
+    except FileNotFoundError:
+        console.print("[yellow]⚠ docker-compose не найден, пропускаем проверку синтаксиса[/yellow]")
+        console.print("\n[bold green]✅ Изменения сохранены![/bold green]")
+        console.print("[cyan]💡 Проверьте синтаксис вручную: docker-compose config[/cyan]")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Не удалось проверить синтаксис: {e}[/yellow]")
+        console.print("\n[bold green]✅ Изменения сохранены![/bold green]")
+        console.print("[cyan]💡 Проверьте синтаксис вручную: docker-compose config[/cyan]")
 
 
 if __name__ == "__main__":
