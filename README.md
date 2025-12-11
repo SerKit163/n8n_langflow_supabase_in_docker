@@ -357,7 +357,9 @@ n8n_langflow_supabase_in_docker/
 ├── remove_ollama.py      # Скрипт удаления Ollama
 ├── remove_n8n.py         # Скрипт удаления N8N
 ├── remove_langflow.py    # Скрипт удаления Langflow
-├── service_manager.py    # Менеджер сервисов (восстановление, логи, статус)
+├── diagnose_and_fix.py   # Комплексная диагностика и автоматическое восстановление
+├── fix_supabase_db.py     # Исправление проблем с базой данных Supabase
+├── service_manager.py     # Менеджер сервисов (восстановление, логи, статус)
 ├── docker-compose.yml    # Docker Compose конфигурация
 ├── .env                  # Переменные окружения (не коммитится)
 ├── installer/            # Модули установщика
