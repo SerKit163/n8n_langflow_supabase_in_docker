@@ -58,17 +58,19 @@ def adapt_config_for_hardware(hardware_info: Dict) -> Dict:
     
     # Специальные предупреждения для Langflow
     langflow_memory = config['memory_limits']['langflow']
+    langflow_min_recommended = 4.0 if total_ram >= 8 else 3.0
+    
     if total_ram < 8:
         warnings.append(
             f"⚠️  Langflow требует много памяти для работы с ИИ агентами! "
-            f"Рекомендуется минимум 8GB RAM. "
+            f"Рекомендуется минимум 8GB RAM для оптимальной работы. "
             f"Текущий лимит: {langflow_memory}GB из {total_ram}GB доступных. "
-            f"При создании сложных агентов память может увеличиться до 4-6GB."
+            f"На малых VPS (< 8GB) используется минимум 3GB вместо 4GB."
         )
-    if langflow_memory < 4:
+    if langflow_memory < langflow_min_recommended:
         warnings.append(
             f"⚠️  Лимит памяти для Langflow ({langflow_memory}GB) может быть недостаточным "
-            f"для работы с ИИ агентами. Рекомендуется минимум 4GB, оптимально 4-6GB."
+            f"для работы с ИИ агентами. Рекомендуется минимум {langflow_min_recommended}GB, оптимально 4-6GB."
         )
     
     # Проверка Ollama
