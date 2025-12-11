@@ -250,6 +250,41 @@ def restart_services():
             )
             if result.returncode == 0:
                 console.print("[green]✓ Сервисы успешно перезапущены![/green]")
+                
+                # Перезагружаем конфигурацию Caddy если он используется
+                try:
+                    # Проверяем, используется ли Caddy (есть ли контейнер caddy)
+                    caddy_check = subprocess.run(
+                        ["docker", "ps", "--filter", "name=caddy", "--format", "{{.Names}}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if caddy_check.returncode == 0 and caddy_check.stdout.strip():
+                        # Перезагружаем конфигурацию Caddy через API
+                        console.print("Перезагрузка конфигурации Caddy...")
+                        reload_result = subprocess.run(
+                            ["docker", "exec", "caddy", "caddy", "reload", "--config", "/etc/caddy/Caddyfile"],
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
+                        if reload_result.returncode == 0:
+                            console.print("[green]✓ Конфигурация Caddy перезагружена[/green]")
+                        else:
+                            # Если reload не сработал, перезапускаем контейнер
+                            console.print("Перезапуск контейнера Caddy...")
+                            subprocess.run(
+                                ["docker-compose", "restart", "caddy"],
+                                capture_output=True,
+                                text=True,
+                                timeout=30
+                            )
+                            console.print("[green]✓ Caddy перезапущен[/green]")
+                except Exception as e:
+                    console.print(f"[yellow]⚠️  Не удалось перезагрузить Caddy: {e}[/yellow]")
+                    console.print("[yellow]Попробуйте вручную: docker-compose restart caddy[/yellow]")
+                
                 return True
             else:
                 console.print(f"[yellow]⚠️  Предупреждения при перезапуске: {result.stderr}[/yellow]")
