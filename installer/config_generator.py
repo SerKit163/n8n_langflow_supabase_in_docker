@@ -354,7 +354,10 @@ def hash_password_for_caddy(password: str) -> str:
     """
     Генерирует bcrypt хеш пароля для Caddy basicauth
     Использует команду caddy hash-password если доступна, иначе использует bcrypt
+    Возвращает хеш в base64 кодировке для избежания символов $ в .env файле
     """
+    import base64
+    
     # Пытаемся использовать caddy hash-password (если Caddy установлен локально)
     try:
         result = subprocess.run(
@@ -364,7 +367,9 @@ def hash_password_for_caddy(password: str) -> str:
             timeout=5
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            bcrypt_hash = result.stdout.strip()
+            # Кодируем в base64 чтобы убрать символы $
+            return base64.b64encode(bcrypt_hash.encode('utf-8')).decode('utf-8')
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
     
@@ -374,7 +379,9 @@ def hash_password_for_caddy(password: str) -> str:
         # Генерируем bcrypt хеш с cost factor 10 (стандарт для Caddy)
         salt = bcrypt.gensalt(rounds=10)
         hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-        return hashed.decode('utf-8')
+        bcrypt_hash = hashed.decode('utf-8')
+        # Кодируем в base64 чтобы убрать символы $
+        return base64.b64encode(bcrypt_hash.encode('utf-8')).decode('utf-8')
     except ImportError:
         # Если bcrypt не установлен, генерируем хеш через Docker контейнер Caddy
         # Это работает если Docker доступен
@@ -386,7 +393,9 @@ def hash_password_for_caddy(password: str) -> str:
                 timeout=10
             )
             if result.returncode == 0:
-                return result.stdout.strip()
+                bcrypt_hash = result.stdout.strip()
+                # Кодируем в base64 чтобы убрать символы $
+                return base64.b64encode(bcrypt_hash.encode('utf-8')).decode('utf-8')
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
         
@@ -396,6 +405,21 @@ def hash_password_for_caddy(password: str) -> str:
         print(f"   Установите bcrypt: pip install bcrypt")
         print(f"   Или используйте команду: docker run --rm caddy:latest caddy hash-password --plaintext '{password}'")
         return ''
+
+
+def decode_password_hash(encoded_hash: str) -> str:
+    """
+    Декодирует base64-закодированный bcrypt хеш обратно в оригинальный формат
+    Используется при генерации Caddyfile
+    """
+    import base64
+    if not encoded_hash:
+        return ''
+    try:
+        return base64.b64decode(encoded_hash.encode('utf-8')).decode('utf-8')
+    except Exception:
+        # Если декодирование не удалось, возможно это уже оригинальный хеш (для обратной совместимости)
+        return encoded_hash
 
 
 def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
@@ -443,11 +467,14 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     supabase_admin_login = config.get('supabase_admin_login', 'admin')
     supabase_admin_password = config.get('supabase_admin_password', '')
     # Используем уже сгенерированный хеш из конфига, если есть
-    supabase_password_hash = config.get('supabase_admin_password_hash', '')
+    supabase_password_hash_encoded = config.get('supabase_admin_password_hash', '')
     
-    # Если хеш не задан, но есть пароль - генерируем хеш
-    if not supabase_password_hash and supabase_admin_password:
-        supabase_password_hash = hash_password_for_caddy(supabase_admin_password)
+    # Если хеш не задан, но есть пароль - генерируем хеш (в base64)
+    if not supabase_password_hash_encoded and supabase_admin_password:
+        supabase_password_hash_encoded = hash_password_for_caddy(supabase_admin_password)
+    
+    # Декодируем base64 хеш для использования в Caddyfile (Caddy требует оригинальный bcrypt формат)
+    supabase_password_hash = decode_password_hash(supabase_password_hash_encoded) if supabase_password_hash_encoded else ''
     
     # Если хеш не сгенерирован, удаляем секцию basic_auth из Supabase Studio
     if not supabase_password_hash:
@@ -464,7 +491,7 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
         'SUPABASE_DOMAIN': supabase_domain,
         'OLLAMA_DOMAIN': ollama_domain if ollama_enabled else '',
         'SUPABASE_ADMIN_LOGIN': supabase_admin_login,
-        'SUPABASE_ADMIN_PASSWORD_HASH': supabase_password_hash,
+        'SUPABASE_ADMIN_PASSWORD_HASH': supabase_password_hash,  # Используем декодированный хеш для Caddyfile
     }
     
     # Заменяем все переменные
