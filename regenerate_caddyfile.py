@@ -43,6 +43,7 @@ def load_config_from_env() -> dict:
     config = {
         'routing_mode': env_vars.get('ROUTING_MODE', ''),
         'letsencrypt_email': env_vars.get('LETSENCRYPT_EMAIL', ''),
+        'letsencrypt_staging': env_vars.get('LETSENCRYPT_STAGING', 'false').lower() == 'true',
         'n8n_enabled': env_vars.get('N8N_ENABLED', 'true').lower() == 'true',
         'langflow_enabled': env_vars.get('LANGFLOW_ENABLED', 'true').lower() == 'true',
         'ollama_enabled': env_vars.get('OLLAMA_ENABLED', 'false').lower() == 'true',
