@@ -317,8 +317,31 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
     else:
         postgres_connection_url = "postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres"
     
-    # Заменяем connection strings в шаблоне на URL-кодированные версии
+    # Настраиваем CORS для Langflow
+    # Если есть домен, используем его с протоколом, иначе *
+    langflow_domain = config.get('langflow_domain', '') or ''
+    letsencrypt_email = config.get('letsencrypt_email', '') or ''
+    routing_mode = config.get('routing_mode', '')
+    
+    if langflow_enabled and langflow_domain and routing_mode == 'subdomain' and letsencrypt_email:
+        # Используем домен с HTTPS
+        langflow_cors_origins = f"https://{langflow_domain},http://{langflow_domain}"
+    elif langflow_enabled and langflow_domain:
+        # Используем домен с HTTP
+        langflow_cors_origins = f"http://{langflow_domain}"
+    else:
+        # Используем * для локальной разработки
+        langflow_cors_origins = '*'
+    
+    # Заменяем CORS в шаблоне
     import re
+    content = re.sub(
+        r'\$\{LANGFLOW_CORS_ORIGINS:-\*\}',
+        langflow_cors_origins,
+        content
+    )
+    
+    # Заменяем connection strings в шаблоне на URL-кодированные версии
     # Заменяем все connection strings с ${POSTGRES_PASSWORD} на URL-кодированную версию
     if postgres_password_encoded:
         # Заменяем только в connection strings (не в переменных окружения POSTGRES_PASSWORD)

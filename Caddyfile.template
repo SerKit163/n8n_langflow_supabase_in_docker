@@ -6,18 +6,22 @@
 # N8N
 {N8N_DOMAIN} {
     reverse_proxy n8n:5678 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
     }
 }
 
 # Langflow
 {LANGFLOW_DOMAIN} {
     reverse_proxy langflow:7860 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
+        
+        # WebSocket поддержка для Langflow (нужна для обновлений в реальном времени)
+        header_up Connection {http.request.header.Connection}
+        header_up Upgrade {http.request.header.Upgrade}
         
         # Увеличиваем таймауты для Langflow (для работы с AI агентами)
         transport http {
@@ -33,18 +37,18 @@
         {SUPABASE_ADMIN_LOGIN} {SUPABASE_ADMIN_PASSWORD_HASH}
     }
     reverse_proxy supabase-studio:3000 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
     }
 }
 
 # Ollama (если включен)
 {OLLAMA_DOMAIN} {
     reverse_proxy ollama:11434 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
     }
 }
 
