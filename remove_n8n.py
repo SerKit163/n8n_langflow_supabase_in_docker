@@ -129,10 +129,12 @@ def stop_and_remove_n8n(remove_volume=True):
                 console.print("[yellow]⚠️  Volume не найден (возможно, уже удален)[/yellow]")
         except Exception as e:
             console.print(f"[yellow]⚠️  Ошибка при удалении volume: {e}[/yellow]")
-    
-    # Удаляем образ N8N если он не используется
+
+
+def remove_n8n_image():
+    """Удаляет неиспользуемый образ N8N"""
     try:
-        console.print("Проверка образа N8N...")
+        console.print("\n[cyan]🖼️  Проверка образа N8N...[/cyan]")
         result = subprocess.run(
             ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}", "n8nio/n8n"],
             capture_output=True,
@@ -341,6 +343,7 @@ def show_summary():
     console.print("\n[cyan]📊 Освобожденное место:[/cyan]")
     console.print("  • Контейнер N8N удален")
     console.print("  • Volume с данными N8N удален (workflows, credentials)")
+    console.print("  • Образ N8N удален")
     console.print("  • Конфигурация обновлена")
     
     console.print("\n[yellow]💡 Для проверки освобожденного места:[/yellow]")
@@ -383,6 +386,9 @@ def main():
     if not remove_n8n_from_config():
         console.print("[red]❌ Не удалось обновить конфигурацию[/red]")
         sys.exit(1)
+    
+    # Удаляем неиспользуемый образ N8N (всегда, независимо от наличия контейнера)
+    remove_n8n_image()
     
     # Перезапускаем сервисы
     restart_services()
