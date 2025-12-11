@@ -338,25 +338,28 @@ def start_n8n():
             
             # Показываем информацию о доступе
             console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
-            config = dotenv_values(".env")
-            routing_mode = config.get('ROUTING_MODE', '')
-            
-            if routing_mode == 'subdomain':
-                domain = config.get('N8N_DOMAIN', '')
-                if domain:
-                    protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
-                    console.print(f"  [green]✓[/green] N8N: {protocol}://{domain}")
-            elif routing_mode == 'path':
-                base_domain = config.get('BASE_DOMAIN', '')
-                n8n_path = config.get('N8N_PATH', '/n8n')
-                if base_domain:
-                    protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
-                    console.print(f"  [green]✓[/green] N8N: {protocol}://{base_domain}{n8n_path}")
-            else:
-                port = config.get('N8N_PORT', '5678')
-                console.print(f"  [green]✓[/green] N8N: http://localhost:{port}")
-            
-            console.print("\n[yellow]💡 При первом запуске N8N создаст учетную запись администратора[/yellow]")
+            try:
+                config = dotenv_values(".env")
+                routing_mode = config.get('ROUTING_MODE', '')
+                
+                if routing_mode == 'subdomain':
+                    domain = config.get('N8N_DOMAIN', '')
+                    if domain:
+                        protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
+                        console.print(f"  [green]✓[/green] N8N: {protocol}://{domain}")
+                elif routing_mode == 'path':
+                    base_domain = config.get('BASE_DOMAIN', '')
+                    n8n_path = config.get('N8N_PATH', '/n8n')
+                    if base_domain:
+                        protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
+                        console.print(f"  [green]✓[/green] N8N: {protocol}://{base_domain}{n8n_path}")
+                else:
+                    port = config.get('N8N_PORT', '5678')
+                    console.print(f"  [green]✓[/green] N8N: http://localhost:{port}")
+                
+                console.print("\n[yellow]💡 При первом запуске N8N создаст учетную запись администратора[/yellow]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Не удалось получить информацию о доступе: {e}[/yellow]")
         else:
             console.print("[red]❌ Ошибка при запуске N8N[/red]")
             console.print("\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
