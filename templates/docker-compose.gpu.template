@@ -55,6 +55,7 @@ services:
       - LANGFLOW_LOAD_FLOWS_ON_STARTUP=false
       - LANGFLOW_AUTO_LOGIN=false
       - LANGFLOW_DISABLE_COMPOSIO=true
+      - LANGFLOW_CONFIG_DIR=/app/data/.langflow
       - PYTHONUNBUFFERED=1
     user: "0"
     entrypoint: |
