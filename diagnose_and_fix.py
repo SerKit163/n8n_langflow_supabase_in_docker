@@ -462,7 +462,8 @@ class SystemDiagnostics:
     
     def show_summary(self, diagnosis: Dict):
         """Показывает сводку диагностики"""
-        self.console.print("\n" + Panel(
+        self.console.print()
+        self.console.print(Panel(
             "[bold cyan]📊 СВОДКА ДИАГНОСТИКИ[/bold cyan]",
             border_style="cyan"
         ))
