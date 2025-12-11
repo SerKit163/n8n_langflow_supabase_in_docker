@@ -167,9 +167,27 @@ def select_routing_mode() -> str:
     
     console.print("""
   1) Поддомены (n8n.yourdomain.com, langflow.yourdomain.com)
+     ✓ SSL сертификаты (HTTPS)
+     ✓ Безопасное соединение
+     ⚠ Требует домен и может быть лимит на сертификаты (7 дней)
+  
   2) Пути (yourdomain.com/n8n, yourdomain.com/langflow)
-  3) Без доменов (только порты, для разработки)
+     ✓ SSL сертификаты (HTTPS)
+     ✓ Безопасное соединение
+     ⚠ Требует домен и может быть лимит на сертификаты (7 дней)
+  
+  3) Только порты (localhost:5678, localhost:7860)
+     ✓ Работает сразу, без ожидания
+     ✓ Не требует домен
+     ✓ Нет лимитов на сертификаты
+     ⚠ Без SSL (только HTTP)
+     ⚠ Для продакшена рекомендуется режим 1 или 2
 """)
+    
+    console.print("\n[yellow]💡 Рекомендация:[/yellow]")
+    console.print("  • Если есть домен и нет проблем с SSL → выберите 1 или 2")
+    console.print("  • Если нужно работать сразу, без ожидания → выберите 3")
+    console.print("  • Позже можно переключиться: python3 switch_to_domains.py\n")
     
     choice = Prompt.ask("Ваш выбор", choices=['1', '2', '3'], default='3')
     return options[choice]
@@ -450,6 +468,38 @@ def configure_domains(routing_mode: str, ollama_available: bool = False, service
             else:
                 domains_config['letsencrypt_staging'] = False
                 console.print("[green]✓ Используется Let's Encrypt Production[/green]")
+    
+    elif routing_mode == 'none':
+        # Режим портов - не требуются домены и SSL
+        console.print("\n[bold cyan]📝 КОНФИГУРАЦИЯ СИСТЕМЫ:[/bold cyan]")
+        console.print("\n[cyan]🔌 Режим прямого доступа через порты[/cyan]")
+        console.print("[green]✓ Сервисы будут доступны напрямую через порты (HTTP)[/green]")
+        console.print("[green]✓ Не требуется домен или SSL сертификаты[/green]")
+        console.print("[green]✓ Работает сразу, без ожидания[/green]")
+        console.print("\n[yellow]💡 Доступ к сервисам:[/yellow]")
+        
+        # Определяем порты из services_selection или используем дефолтные
+        n8n_port = 5678
+        langflow_port = 7860
+        supabase_port = 3000
+        
+        if services_selection and services_selection.get('n8n_enabled', True):
+            console.print(f"  • N8N: http://localhost:{n8n_port} или http://IP_СЕРВЕРА:{n8n_port}")
+        if services_selection and services_selection.get('langflow_enabled', True):
+            console.print(f"  • Langflow: http://localhost:{langflow_port} или http://IP_СЕРВЕРА:{langflow_port}")
+        console.print(f"  • Supabase Studio: http://localhost:{supabase_port} или http://IP_СЕРВЕРА:{supabase_port}")
+        
+        console.print("\n[yellow]⚠ Внимание:[/yellow]")
+        console.print("  • Доступ только по HTTP (без SSL)")
+        console.print("  • Для продакшена рекомендуется использовать домены с SSL")
+        console.print("  • Позже можно переключиться на домены: python3 switch_to_domains.py")
+        
+        # Сохраняем информацию о портах
+        domains_config['use_direct_ports'] = True
+        domains_config['ssl_enabled'] = False
+        domains_config['n8n_port'] = n8n_port
+        domains_config['langflow_port'] = langflow_port
+        domains_config['supabase_port'] = supabase_port
     
     return domains_config
 

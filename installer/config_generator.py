@@ -388,6 +388,46 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         # Удаляем ollama_data из volumes
         content = re.sub(r'  ollama_data:\s*driver: local\n', '', content)
     
+    # Если режим 'none' (только порты), автоматически включаем порты
+    routing_mode = config.get('routing_mode', '')
+    use_direct_ports = config.get('use_direct_ports', False) or routing_mode == 'none'
+    
+    if use_direct_ports:
+        import re
+        # Раскомментируем порты для включенных сервисов
+        if n8n_enabled:
+            # Раскомментируем порты для n8n
+            n8n_port = config.get('n8n_port', 5678)
+            # Паттерн для закомментированных портов с переменными ${N8N_PORT}
+            content = re.sub(
+                r'(\s+n8n:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "\$\{N8N_PORT\}:\d+"',
+                rf'\1\2# Прямой доступ через порт (режим без доменов)\n\3ports:\n\4  - "{n8n_port}:5678"',
+                content,
+                flags=re.MULTILINE
+            )
+        
+        if langflow_enabled:
+            # Раскомментируем порты для langflow
+            langflow_port = config.get('langflow_port', 7860)
+            # Паттерн для закомментированных портов
+            content = re.sub(
+                r'(\s+langflow:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "\d+:\d+"',
+                rf'\1\2# Прямой доступ через порт (режим без доменов)\n\3ports:\n\4  - "{langflow_port}:7860"',
+                content,
+                flags=re.MULTILINE
+            )
+        
+        # Раскомментируем порты для supabase-studio
+        supabase_port = config.get('supabase_kb_port', 3000)
+        # Паттерн для закомментированных портов с переменными ${SUPABASE_KB_PORT}
+        # Формат в шаблоне: "127.0.0.1:${SUPABASE_KB_PORT:-3000}:3000"
+        content = re.sub(
+            r'(\s+supabase-studio:[^\n]*\n(?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)# ВАЖНО: Не открываем порт наружу напрямую! Прокси через Caddy\.\n(\s+)# ports:\n(\s+)#\s+- "127\.0\.0\.1:\$\{SUPABASE_KB_PORT[^"]+\}:\d+"',
+            rf'\1\2# Прямой доступ через порт (режим без доменов)\n\3ports:\n\4  - "{supabase_port}:3000"',
+            content,
+            flags=re.MULTILINE
+        )
+    
     # Шаблоны уже используют ${VAR} синтаксис, поэтому просто записываем как есть
     # Но нужно добавить env_file если его нет
     if 'env_file:' not in content and 'x-env-file:' not in content:
