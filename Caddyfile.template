@@ -1,9 +1,7 @@
 {
     email {CADDY_EMAIL}
-    # Buypass Go SSL - бесплатный CA без регистрации, работает из коробки
-    # Решение проблемы с ZeroSSL pre-registration callback
-    acme_ca https://api.buypass.com/acme/directory
-    # Caddy автоматически перенаправляет HTTP на HTTPS
+    # Let's Encrypt - используется по умолчанию в Caddy
+    # Caddy автоматически получает сертификаты и перенаправляет HTTP на HTTPS
 }
 
 # N8N

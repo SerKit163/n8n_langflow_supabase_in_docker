@@ -246,6 +246,10 @@ services:
     restart: unless-stopped
     environment:
       - CADDY_EMAIL=${LETSENCRYPT_EMAIL:-}
+    # DNS настройки для надежного разрешения доменов ACME серверов
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
 volumes:
   n8n_data:
