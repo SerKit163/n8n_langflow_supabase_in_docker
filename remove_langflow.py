@@ -206,6 +206,9 @@ def remove_langflow_from_config():
         full_config['ollama_port'] = safe_int(config.get('OLLAMA_PORT', ''), 11434)
         full_config['ollama_memory_limit'] = config.get('OLLAMA_MEMORY_LIMIT', '2g') or '2g'
         full_config['ollama_cpu_limit'] = safe_float(config.get('OLLAMA_CPU_LIMIT', ''), 1.0)
+    
+    # Добавляем настройки Supabase
+    full_config.update({
         'postgres_password': config.get('POSTGRES_PASSWORD', ''),
         'supabase_admin_login': config.get('SUPABASE_ADMIN_LOGIN', 'admin'),
         'supabase_admin_password': config.get('SUPABASE_ADMIN_PASSWORD', ''),
