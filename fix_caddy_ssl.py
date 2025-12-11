@@ -37,12 +37,44 @@ def run_command(cmd, description):
         return False
 
 
+def check_dns_and_email():
+    """Проверяет DNS и email настройки (на основе рекомендаций из проекта lisa)"""
+    console.print("\n[cyan]🔍 Проверка настроек...[/cyan]")
+    
+    # Проверяем .env файл
+    env_path = Path(".env")
+    if env_path.exists():
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
+        import os
+        
+        email = os.getenv("LETSENCRYPT_EMAIL", "")
+        if not email or email == "":
+            console.print("[yellow]⚠ Email для Let's Encrypt не установлен в .env[/yellow]")
+        elif "@" not in email or email.count("@") != 1:
+            console.print("[red]❌ Email для Let's Encrypt выглядит неверно: {email}[/red]")
+            console.print("[yellow]💡 ВАЖНО: Используйте настоящий email адрес![/yellow]")
+            console.print("[yellow]💡 Let's Encrypt не принимает фейковые email (например, test@test.test)[/yellow]")
+        else:
+            console.print(f"[green]✓ Email настроен: {email}[/green]")
+    else:
+        console.print("[yellow]⚠ Файл .env не найден[/yellow]")
+    
+    console.print("\n[cyan]💡 Рекомендации из проекта lisa:[/cyan]")
+    console.print("1. Проверьте DNS — A-записи должны указывать на ваш сервер")
+    console.print("2. Убедитесь, что email в .env настоящий (не фейковый)")
+    console.print("3. Проверьте, что порты 80 и 443 открыты")
+
+
 def main():
     """Главная функция"""
     console.print(Panel.fit(
         "[bold cyan]🔧 Исправление проблем с SSL в Caddy[/bold cyan]",
         border_style="cyan"
     ))
+    
+    # Проверяем настройки перед началом
+    check_dns_and_email()
     
     console.print("\n[yellow]Этот скрипт:[/yellow]")
     console.print("1. Остановит Caddy")
@@ -81,11 +113,20 @@ def main():
     run_command("docker-compose logs --tail=20 caddy", "Логи Caddy")
     
     console.print("\n[bold green]✅ Готово![/bold green]")
-    console.print("\n[cyan]💡 Следующие шаги:[/cyan]")
+    console.print("\n[cyan]💡 Следующие шаги (на основе рекомендаций проекта lisa):[/cyan]")
     console.print("1. Проверьте логи: docker-compose logs -f caddy")
-    console.print("2. Попробуйте открыть сайт в браузере")
-    console.print("3. Если браузер показывает предупреждение о сертификате - это нормально для самоподписанных сертификатов")
-    console.print("4. Нажмите 'Advanced' → 'Proceed to site' в браузере")
+    console.print("2. Проверьте DNS — A-записи должны указывать на ваш сервер")
+    console.print("3. Очистите DNS кэш на клиенте:")
+    console.print("   - Mac: sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder")
+    console.print("   - Linux: sudo systemd-resolve --flush-caches")
+    console.print("   - Windows: ipconfig /flushdns")
+    console.print("4. Попробуйте открыть сайт в браузере")
+    console.print("5. Если браузер показывает предупреждение о сертификате - это нормально для самоподписанных сертификатов")
+    console.print("6. Нажмите 'Advanced' → 'Proceed to site' в браузере")
+    console.print("\n[yellow]⚠ Если проблема сохраняется:[/yellow]")
+    console.print("- Убедитесь, что email в .env настоящий (не фейковый)")
+    console.print("- Проверьте, что порты 80 и 443 открыты на сервере")
+    console.print("- Убедитесь, что DNS записи правильно настроены")
 
 
 if __name__ == "__main__":
