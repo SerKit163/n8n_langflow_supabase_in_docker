@@ -539,21 +539,24 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     
     import re
     
-    # Удаляем секции для невыбранных сервисов
-    if not n8n_enabled:
+    # Удаляем секции для невыбранных сервисов или если домен пустой
+    if not n8n_enabled or not n8n_domain:
         # Удаляем блок n8n (от # N8N до следующего блока или конца)
         n8n_pattern = r'# N8N.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(n8n_pattern, '', content, flags=re.DOTALL)
     
-    if not langflow_enabled:
+    if not langflow_enabled or not langflow_domain:
         # Удаляем блок langflow (от # Langflow до следующего блока или конца)
         langflow_pattern = r'# Langflow.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(langflow_pattern, '', content, flags=re.DOTALL)
     
-    # Удаляем секцию Ollama если она не включена
-    if not ollama_enabled:
+    # Удаляем секцию Ollama если она не включена или домен пустой
+    if not ollama_enabled or not ollama_domain:
         ollama_pattern = r'# Ollama.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(ollama_pattern, '', content, flags=re.DOTALL)
+    
+    # Удаляем пустые строки (более 2 подряд)
+    content = re.sub(r'\n{3,}', '\n\n', content)
     
     write_file(output_path, content)
 

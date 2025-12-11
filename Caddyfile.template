@@ -6,20 +6,18 @@
 # N8N
 {N8N_DOMAIN} {
     reverse_proxy n8n:5678 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
     }
 }
 
 # Langflow
 {LANGFLOW_DOMAIN} {
     reverse_proxy langflow:7860 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
         
         # Увеличиваем таймауты для Langflow
         transport http {
@@ -35,20 +33,18 @@
         {SUPABASE_ADMIN_LOGIN} {SUPABASE_ADMIN_PASSWORD_HASH}
     }
     reverse_proxy supabase-studio:3000 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
     }
 }
 
 # Ollama (если включен)
 {OLLAMA_DOMAIN} {
     reverse_proxy ollama:11434 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
     }
 }
 
