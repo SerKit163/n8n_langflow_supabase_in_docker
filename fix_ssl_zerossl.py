@@ -41,38 +41,47 @@ def run_command(cmd: list, description: str, check: bool = False) -> bool:
 def main():
     """Главная функция - быстрое исправление SSL"""
     console.print(Panel.fit(
-        "[bold cyan]🔐 Быстрое исправление SSL через ZeroSSL[/bold cyan]",
+        "[bold cyan]🔐 Быстрое исправление SSL через Buypass Go SSL[/bold cyan]",
         border_style="cyan"
     ))
     
     console.print("\n[yellow]Этот скрипт:[/yellow]")
-    console.print("1. Переключит Caddy на ZeroSSL (без лимитов)")
+    console.print("1. Переключит Caddy на Buypass Go SSL (без регистрации)")
     console.print("2. Очистит старые проблемные сертификаты")
     console.print("3. Перегенерирует Caddyfile")
     console.print("4. Перезапустит Caddy")
     
-    console.print("\n[green]✓ ZeroSSL - бесплатная альтернатива Let's Encrypt[/green]")
-    console.print("  • Нет лимита 5 сертификатов/7 дней")
+    console.print("\n[green]✓ Buypass Go SSL - бесплатный CA без регистрации[/green]")
+    console.print("  • Работает из коробки - БЕЗ pre-registration")
+    console.print("  • БЕЗ лимита 5 сертификатов/7 дней")
     console.print("  • Более мягкие ограничения")
-    console.print("  • Работает так же надежно")
+    console.print("  • Решение проблемы с ZeroSSL")
     
     if not console.input("\n[cyan]Продолжить? (y/n): [/cyan]").lower().startswith('y'):
         console.print("[yellow]Отменено[/yellow]")
         return
     
-    # 1. Переключаем на ZeroSSL
-    console.print("\n[bold cyan]Шаг 1: Переключение на ZeroSSL[/bold cyan]")
+    # 1. Переключаем на Buypass Go SSL
+    console.print("\n[bold cyan]Шаг 1: Переключение на Buypass Go SSL[/bold cyan]")
     try:
-        from switch_to_zerossl import switch_caddyfile_to_zerossl, clear_old_certificates, regenerate_caddyfile
+        from switch_to_buypass import switch_caddyfile_to_buypass
+        from switch_to_zerossl import clear_old_certificates, regenerate_caddyfile
         
-        if switch_caddyfile_to_zerossl():
-            console.print("[green]✓ Переключено на ZeroSSL[/green]")
+        if switch_caddyfile_to_buypass():
+            console.print("[green]✓ Переключено на Buypass Go SSL[/green]")
         else:
-            console.print("[yellow]⚠ ZeroSSL уже настроен или ошибка[/yellow]")
+            console.print("[yellow]⚠ Buypass Go SSL уже настроен или ошибка[/yellow]")
     except ImportError:
-        console.print("[yellow]⚠ Не удалось импортировать switch_to_zerossl.py[/yellow]")
-        console.print("[cyan]💡 Убедитесь, что файл существует[/cyan]")
-        return
+        # Пробуем через switch_to_zerossl для обратной совместимости
+        try:
+            from switch_to_zerossl import switch_caddyfile_to_zerossl, clear_old_certificates, regenerate_caddyfile
+            console.print("[yellow]⚠ Используем ZeroSSL (старая версия)[/yellow]")
+            if switch_caddyfile_to_zerossl():
+                console.print("[green]✓ Переключено на ZeroSSL[/green]")
+        except ImportError:
+            console.print("[red]❌ Не удалось импортировать скрипты переключения[/red]")
+            console.print("[cyan]💡 Убедитесь, что файлы switch_to_buypass.py или switch_to_zerossl.py существуют[/cyan]")
+            return
     
     # 2. Перегенерируем Caddyfile
     console.print("\n[bold cyan]Шаг 2: Перегенерация Caddyfile[/bold cyan]")
