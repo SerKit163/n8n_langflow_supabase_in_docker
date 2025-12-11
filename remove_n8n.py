@@ -147,12 +147,35 @@ def remove_n8n_from_config():
     set_key(env_path, 'N8N_ENABLED', 'false')
     console.print("[green]✓ .env обновлен (N8N_ENABLED=false)[/green]")
     
+    # Безопасные функции для преобразования значений
+    def safe_int(value, default):
+        """Безопасно преобразует значение в int, возвращает default если пустое"""
+        if not value or value.strip() == '':
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_float(value, default):
+        """Безопасно преобразует значение в float, возвращает default если пустое"""
+        if not value or value.strip() == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    # Проверяем какие сервисы включены
+    langflow_enabled = config.get('LANGFLOW_ENABLED', 'true').strip().lower() != 'false'
+    ollama_enabled = config.get('OLLAMA_ENABLED', '').strip().lower() == 'true'
+    
     # Обновляем конфигурацию для генерации docker-compose
     full_config = dict(config)
     full_config.update({
         'n8n_enabled': False,
-        'langflow_enabled': config.get('LANGFLOW_ENABLED', 'true').strip().lower() != 'false',
-        'ollama_enabled': config.get('OLLAMA_ENABLED', '').strip().lower() == 'true',
+        'langflow_enabled': langflow_enabled,
+        'ollama_enabled': ollama_enabled,
         'routing_mode': config.get('ROUTING_MODE', ''),
         'n8n_domain': config.get('N8N_DOMAIN', ''),
         'langflow_domain': config.get('LANGFLOW_DOMAIN', ''),
@@ -161,23 +184,31 @@ def remove_n8n_from_config():
         'base_domain': config.get('BASE_DOMAIN', ''),
         'letsencrypt_email': config.get('LETSENCRYPT_EMAIL', ''),
         'ssl_enabled': config.get('SSL_ENABLED', 'true').lower() == 'true',
-        'n8n_port': int(config.get('N8N_PORT', '5678')),
-        'langflow_port': int(config.get('LANGFLOW_PORT', '7860')),
-        'supabase_port': int(config.get('SUPABASE_PORT', '8000')),
-        'supabase_kb_port': int(config.get('SUPABASE_KB_PORT', '3000')),
-        'ollama_port': int(config.get('OLLAMA_PORT', '11434')),
         'n8n_path': config.get('N8N_PATH', '/n8n'),
         'langflow_path': config.get('LANGFLOW_PATH', '/langflow'),
         'supabase_path': config.get('SUPABASE_PATH', '/supabase'),
         'ollama_path': config.get('OLLAMA_PATH', '/ollama'),
-        'n8n_memory_limit': config.get('N8N_MEMORY_LIMIT', '2g'),
-        'n8n_cpu_limit': float(config.get('N8N_CPU_LIMIT', '0.5')),
-        'langflow_memory_limit': config.get('LANGFLOW_MEMORY_LIMIT', '4g'),
-        'langflow_cpu_limit': float(config.get('LANGFLOW_CPU_LIMIT', '0.5')),
-        'supabase_memory_limit': config.get('SUPABASE_MEMORY_LIMIT', '1g'),
-        'supabase_cpu_limit': float(config.get('SUPABASE_CPU_LIMIT', '0.3')),
-        'ollama_memory_limit': config.get('OLLAMA_MEMORY_LIMIT', '2g'),
-        'ollama_cpu_limit': float(config.get('OLLAMA_CPU_LIMIT', '1.0')),
+        'supabase_memory_limit': config.get('SUPABASE_MEMORY_LIMIT', '1g') or '1g',
+        'supabase_cpu_limit': safe_float(config.get('SUPABASE_CPU_LIMIT', ''), 0.3),
+    })
+    
+    # Порты - только для включенных сервисов
+    if langflow_enabled:
+        full_config['langflow_port'] = safe_int(config.get('LANGFLOW_PORT', ''), 7860)
+        full_config['langflow_memory_limit'] = config.get('LANGFLOW_MEMORY_LIMIT', '4g') or '4g'
+        full_config['langflow_cpu_limit'] = safe_float(config.get('LANGFLOW_CPU_LIMIT', ''), 0.5)
+    
+    # Supabase всегда включен
+    full_config['supabase_port'] = safe_int(config.get('SUPABASE_PORT', ''), 8000)
+    full_config['supabase_kb_port'] = safe_int(config.get('SUPABASE_KB_PORT', ''), 3000)
+    
+    if ollama_enabled:
+        full_config['ollama_port'] = safe_int(config.get('OLLAMA_PORT', ''), 11434)
+        full_config['ollama_memory_limit'] = config.get('OLLAMA_MEMORY_LIMIT', '2g') or '2g'
+        full_config['ollama_cpu_limit'] = safe_float(config.get('OLLAMA_CPU_LIMIT', ''), 1.0)
+    
+    # Добавляем настройки Supabase
+    full_config.update({
         'postgres_password': config.get('POSTGRES_PASSWORD', ''),
         'supabase_admin_login': config.get('SUPABASE_ADMIN_LOGIN', 'admin'),
         'supabase_admin_password': config.get('SUPABASE_ADMIN_PASSWORD', ''),
