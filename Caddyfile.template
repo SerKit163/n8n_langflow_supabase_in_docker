@@ -19,10 +19,10 @@
         header_up X-Forwarded-For {http.request.remote.host}
         header_up X-Forwarded-Proto {http.request.scheme}
         
-        # Увеличиваем таймауты для Langflow
+        # Увеличиваем таймауты для Langflow (для работы с AI агентами)
         transport http {
             dial_timeout 30s
-            response_header_timeout 60s
+            response_header_timeout 120s
         }
     }
 }
