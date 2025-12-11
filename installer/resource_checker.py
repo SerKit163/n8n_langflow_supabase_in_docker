@@ -20,23 +20,34 @@ def check_resources(hardware: Dict, config: Dict) -> tuple[bool, List[str], List
     warnings = []
     
     # Проверка RAM
+    # Используем общую RAM VPS, а не доступную в данный момент
+    # так как Docker будет использовать лимиты, а не всю доступную RAM
     summary = get_resource_summary(config)
     required_ram = summary['total_memory_gb']
+    total_ram = hardware['ram']['total_gb']
     available_ram = hardware['ram']['available_gb']
     
-    if required_ram > available_ram:
+    # Проверяем общую RAM VPS (это реальный лимит)
+    if required_ram > total_ram:
         errors.append(
-            f"❌ Недостаточно RAM!\n"
+            f"❌ Недостаточно RAM на VPS!\n"
             f"   Требуется: {required_ram:.1f} GB\n"
-            f"   Доступно: {available_ram:.1f} GB\n"
-            f"   Необходимо освободить: {required_ram - available_ram:.1f} GB"
+            f"   Всего на VPS: {total_ram:.1f} GB\n"
+            f"   Необходимо увеличить RAM VPS на: {required_ram - total_ram:.1f} GB"
         )
-    elif required_ram > available_ram * 0.9:
+    elif required_ram > total_ram * 0.85:
         warnings.append(
-            f"⚠ Мало свободной RAM!\n"
+            f"⚠ Мало RAM на VPS!\n"
             f"   Требуется: {required_ram:.1f} GB\n"
-            f"   Доступно: {available_ram:.1f} GB\n"
-            f"   Рекомендуется иметь запас минимум 2 GB"
+            f"   Всего на VPS: {total_ram:.1f} GB\n"
+            f"   Рекомендуется иметь запас минимум 1-2 GB для системы"
+        )
+    # Дополнительное предупреждение если свободной RAM мало
+    elif available_ram < 1.0:
+        warnings.append(
+            f"⚠ Мало свободной RAM в данный момент!\n"
+            f"   Свободно: {available_ram:.1f} GB\n"
+            f"   Рекомендуется освободить память перед установкой"
         )
     
     # Проверка диска (учитываем только выбранные сервисы)
