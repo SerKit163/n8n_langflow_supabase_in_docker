@@ -138,6 +138,77 @@ def stop_and_remove_ollama(remove_volume=True):
                     console.print("[yellow]⚠️  Volume не найден (возможно, уже удален)[/yellow]")
         except Exception as e:
             console.print(f"[yellow]⚠️  Ошибка при удалении volume: {e}[/yellow]")
+ 
+
+def get_image_size(image_name: str) -> str:
+    """Получает размер образа Docker"""
+    try:
+        result = subprocess.run(
+            ["docker", "images", "--format", "{{.Size}}", image_name],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.stdout.strip():
+            return result.stdout.strip().split('\n')[0]
+        return "неизвестно"
+    except Exception:
+        return "неизвестно"
+
+
+def remove_ollama_image(ask_confirmation: bool = True):
+    """Удаляет неиспользуемый образ Ollama"""
+    try:
+        console.print("\n[cyan]🖼️  Проверка образа Ollama...[/cyan]")
+        # Проверяем разные варианты имени образа
+        ollama_images = ["ollama/ollama", "ollama"]
+        for image_pattern in ollama_images:
+            result = subprocess.run(
+                ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}", image_pattern],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.stdout.strip():
+                images = result.stdout.strip().split('\n')
+                for image in images:
+                    # Проверяем, используется ли образ
+                    check_result = subprocess.run(
+                        ["docker", "ps", "-a", "--filter", f"ancestor={image}", "--format", "{{.ID}}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    if not check_result.stdout.strip():
+                        # Образ не используется
+                        image_size = get_image_size(image)
+                        console.print(f"[yellow]Найден неиспользуемый образ: {image} (размер: {image_size})[/yellow]")
+                        
+                        # Спрашиваем пользователя
+                        if ask_confirmation:
+                            if not Confirm.ask(
+                                f"\nУдалить образ {image} для освобождения места на диске ({image_size})?",
+                                default=True
+                            ):
+                                console.print(f"[yellow]⚠️  Образ не удален (можно удалить позже: docker rmi {image})[/yellow]")
+                                continue
+                        
+                        # Удаляем образ
+                        console.print(f"Удаление образа {image}...")
+                        rm_result = subprocess.run(
+                            ["docker", "rmi", "-f", image],
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                        if rm_result.returncode == 0:
+                            console.print(f"[green]✓ Образ {image} удален (освобождено {image_size})[/green]")
+                        else:
+                            console.print(f"[yellow]⚠️  Не удалось удалить образ {image}: {rm_result.stderr}[/yellow]")
+                    else:
+                        console.print(f"[yellow]⚠️  Образ {image} все еще используется, пропускаем[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Ошибка при проверке/удалении образа: {e}[/yellow]")
 
 
 def remove_ollama_from_config():
