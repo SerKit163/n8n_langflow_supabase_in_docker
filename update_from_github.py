@@ -219,32 +219,6 @@ def convert_env_to_config(env_config):
     # Email для SSL
     config['letsencrypt_email'] = env_config.get('LETSENCRYPT_EMAIL', '')
     
-    # Порты
-    config['n8n_port'] = int(env_config.get('N8N_PORT', '5678'))
-    config['langflow_port'] = int(env_config.get('LANGFLOW_PORT', '7860'))
-    config['supabase_port'] = int(env_config.get('SUPABASE_PORT', '8000'))
-    config['supabase_kb_port'] = int(env_config.get('SUPABASE_KB_PORT', '3000'))
-    config['ollama_port'] = int(env_config.get('OLLAMA_PORT', '11434'))
-    
-    # Лимиты ресурсов
-    config['n8n_memory_limit'] = env_config.get('N8N_MEMORY_LIMIT', '2g')
-    config['n8n_cpu_limit'] = float(env_config.get('N8N_CPU_LIMIT', '0.5'))
-    config['langflow_memory_limit'] = env_config.get('LANGFLOW_MEMORY_LIMIT', '2g')
-    config['langflow_cpu_limit'] = float(env_config.get('LANGFLOW_CPU_LIMIT', '0.5'))
-    config['supabase_memory_limit'] = env_config.get('SUPABASE_MEMORY_LIMIT', '1g')
-    config['supabase_cpu_limit'] = float(env_config.get('SUPABASE_CPU_LIMIT', '0.3'))
-    config['ollama_memory_limit'] = env_config.get('OLLAMA_MEMORY_LIMIT', '2g')
-    config['ollama_cpu_limit'] = float(env_config.get('OLLAMA_CPU_LIMIT', '1.0'))
-    
-    # Supabase
-    config['postgres_password'] = env_config.get('POSTGRES_PASSWORD', '')
-    config['supabase_admin_login'] = env_config.get('SUPABASE_ADMIN_LOGIN', 'admin')
-    config['supabase_admin_password'] = env_config.get('SUPABASE_ADMIN_PASSWORD', '')
-    config['supabase_admin_password_hash'] = env_config.get('SUPABASE_ADMIN_PASSWORD_HASH', '')
-    config['jwt_secret'] = env_config.get('JWT_SECRET', '')
-    config['anon_key'] = env_config.get('ANON_KEY', '')
-    config['service_role_key'] = env_config.get('SERVICE_ROLE_KEY', '')
-    
     # Сервисы - проверяем какие включены (по умолчанию все включены для обратной совместимости)
     n8n_enabled_str = env_config.get('N8N_ENABLED', 'true').strip().lower()
     config['n8n_enabled'] = n8n_enabled_str != 'false'
@@ -258,6 +232,59 @@ def convert_env_to_config(env_config):
     # Ollama - только если явно включен в .env
     ollama_enabled_str = env_config.get('OLLAMA_ENABLED', '').strip().lower()
     config['ollama_enabled'] = ollama_enabled_str == 'true'
+    
+    # Порты - только для включенных сервисов, безопасное преобразование
+    def safe_int(value, default):
+        """Безопасно преобразует значение в int, возвращает default если пустое"""
+        if not value or value.strip() == '':
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_float(value, default):
+        """Безопасно преобразует значение в float, возвращает default если пустое"""
+        if not value or value.strip() == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    # Порты - только для включенных сервисов
+    if config['n8n_enabled']:
+        config['n8n_port'] = safe_int(env_config.get('N8N_PORT', ''), 5678)
+    if config['langflow_enabled']:
+        config['langflow_port'] = safe_int(env_config.get('LANGFLOW_PORT', ''), 7860)
+    # Supabase всегда включен
+    config['supabase_port'] = safe_int(env_config.get('SUPABASE_PORT', ''), 8000)
+    config['supabase_kb_port'] = safe_int(env_config.get('SUPABASE_KB_PORT', ''), 3000)
+    if config['ollama_enabled']:
+        config['ollama_port'] = safe_int(env_config.get('OLLAMA_PORT', ''), 11434)
+    
+    # Лимиты ресурсов - только для включенных сервисов
+    if config['n8n_enabled']:
+        config['n8n_memory_limit'] = env_config.get('N8N_MEMORY_LIMIT', '2g') or '2g'
+        config['n8n_cpu_limit'] = safe_float(env_config.get('N8N_CPU_LIMIT', ''), 0.5)
+    if config['langflow_enabled']:
+        config['langflow_memory_limit'] = env_config.get('LANGFLOW_MEMORY_LIMIT', '4g') or '4g'
+        config['langflow_cpu_limit'] = safe_float(env_config.get('LANGFLOW_CPU_LIMIT', ''), 0.5)
+    # Supabase всегда включен
+    config['supabase_memory_limit'] = env_config.get('SUPABASE_MEMORY_LIMIT', '1g') or '1g'
+    config['supabase_cpu_limit'] = safe_float(env_config.get('SUPABASE_CPU_LIMIT', ''), 0.3)
+    if config['ollama_enabled']:
+        config['ollama_memory_limit'] = env_config.get('OLLAMA_MEMORY_LIMIT', '2g') or '2g'
+        config['ollama_cpu_limit'] = safe_float(env_config.get('OLLAMA_CPU_LIMIT', ''), 1.0)
+    
+    # Supabase
+    config['postgres_password'] = env_config.get('POSTGRES_PASSWORD', '')
+    config['supabase_admin_login'] = env_config.get('SUPABASE_ADMIN_LOGIN', 'admin')
+    config['supabase_admin_password'] = env_config.get('SUPABASE_ADMIN_PASSWORD', '')
+    config['supabase_admin_password_hash'] = env_config.get('SUPABASE_ADMIN_PASSWORD_HASH', '')
+    config['jwt_secret'] = env_config.get('JWT_SECRET', '')
+    config['anon_key'] = env_config.get('ANON_KEY', '')
+    config['service_role_key'] = env_config.get('SERVICE_ROLE_KEY', '')
     
     # Если сервисы не включены, не добавляем их настройки
     if not config['n8n_enabled']:
