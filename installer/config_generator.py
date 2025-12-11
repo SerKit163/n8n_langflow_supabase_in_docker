@@ -540,18 +540,19 @@ def generate_caddyfile(config: Dict, output_path: str = "Caddyfile") -> None:
     import re
     
     # Удаляем секции для невыбранных сервисов или если домен пустой
-    if not n8n_enabled or not n8n_domain:
+    # Важно: проверяем после замены переменных, чтобы удалить блоки с пустыми доменами
+    if not n8n_enabled or not n8n_domain or n8n_domain == 'localhost':
         # Удаляем блок n8n (от # N8N до следующего блока или конца)
         n8n_pattern = r'# N8N.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(n8n_pattern, '', content, flags=re.DOTALL)
     
-    if not langflow_enabled or not langflow_domain:
+    if not langflow_enabled or not langflow_domain or langflow_domain == 'localhost':
         # Удаляем блок langflow (от # Langflow до следующего блока или конца)
         langflow_pattern = r'# Langflow.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(langflow_pattern, '', content, flags=re.DOTALL)
     
     # Удаляем секцию Ollama если она не включена или домен пустой
-    if not ollama_enabled or not ollama_domain:
+    if not ollama_enabled or not ollama_domain or ollama_domain == 'localhost':
         ollama_pattern = r'# Ollama.*?(?=\n# [A-Z]|\n\n\n|\Z)'
         content = re.sub(ollama_pattern, '', content, flags=re.DOTALL)
     
