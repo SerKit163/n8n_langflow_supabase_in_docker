@@ -396,6 +396,7 @@ docker-compose up -d [service_name]
 
 - Все пароли и секреты генерируются автоматически
 - SSL/TLS поддержка через Let's Encrypt
+- Обход лимитов Let's Encrypt (DNS Challenge, ротация email, TLS on Demand)
 - Ограничения ресурсов для каждого сервиса
 - Health checks для мониторинга
 
