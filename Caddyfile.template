@@ -15,11 +15,14 @@
 # Langflow
 {LANGFLOW_DOMAIN} {
     reverse_proxy langflow:7860 {
+        # Передаем заголовки для правильной работы прокси
+        header_up Host {host}
         header_up X-Real-IP {http.request.remote.host}
         header_up X-Forwarded-For {http.request.remote.host}
         header_up X-Forwarded-Proto {http.request.scheme}
         
-        # WebSocket поддержка для Langflow (нужна для обновлений в реальном времени)
+        # WebSocket поддержка для Langflow (Caddy автоматически обрабатывает WebSocket)
+        # Но явно передаем заголовки для совместимости
         header_up Connection {http.request.header.Connection}
         header_up Upgrade {http.request.header.Upgrade}
         
@@ -27,6 +30,7 @@
         transport http {
             dial_timeout 30s
             response_header_timeout 120s
+            response_body_timeout 300s
         }
     }
 }
