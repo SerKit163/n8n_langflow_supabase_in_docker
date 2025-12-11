@@ -64,22 +64,37 @@ def check_certificates():
         if len(cert_files) > 10:
             console.print(f"  ... и еще {len(cert_files) - 10} файлов")
         
-        # Проверяем конкретные домены
+        # Проверяем конкретные домены - ищем в правильных местах
         console.print("\n[cyan]🔍 Проверка сертификатов для ваших доменов...[/cyan]")
         domains_to_check = ["n8n.ai-agents-seed.ru", "langflow.ai-agents-seed.ru", "supabase.ai-agents-seed.ru"]
         
+        found_any = False
         for domain in domains_to_check:
-            domain_clean = domain.replace(".", "_")
-            if caddy_running:
-                check_cmd = f"docker-compose exec -T caddy sh -c 'ls /data/caddy/acme/acme-v02.api.letsencrypt.org-directory/sites/*{domain_clean}* 2>/dev/null | head -1'"
-            else:
-                check_cmd = f"docker run --rm -v n8n_langflow_supabase_in_docker_caddy_data:/data alpine ls /data/caddy/acme/acme-v02.api.letsencrypt.org-directory/sites/*{domain_clean}* 2>/dev/null | head -1"
+            # Caddy хранит сертификаты в разных местах, проверяем все варианты
+            search_paths = [
+                f"/data/caddy/acme/acme-v02.api.letsencrypt.org-directory/sites/{domain}",
+                f"/data/caddy/acme/acme-v02.api.letsencrypt.org-directory/sites/*{domain.replace('.', '_')}*",
+                f"/data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/{domain}",
+            ]
             
-            success, output, _ = run_command(check_cmd)
-            if success and output.strip():
-                console.print(f"  [green]✓ Сертификат для {domain} найден[/green]")
-            else:
+            found = False
+            for search_path in search_paths:
+                if caddy_running:
+                    check_cmd = f"docker-compose exec -T caddy sh -c 'test -d {search_path} && echo found || (ls -d {search_path} 2>/dev/null | head -1)'"
+                else:
+                    check_cmd = f"docker run --rm -v n8n_langflow_supabase_in_docker_caddy_data:/data alpine sh -c 'test -d /data{search_path} && echo found || (ls -d /data{search_path} 2>/dev/null | head -1)'"
+                
+                success, output, _ = run_command(check_cmd)
+                if success and output.strip() and "found" in output:
+                    console.print(f"  [green]✓ Сертификат для {domain} найден[/green]")
+                    found = True
+                    found_any = True
+                    break
+            
+            if not found:
                 console.print(f"  [yellow]⚠ Сертификат для {domain} не найден[/yellow]")
+        
+        return found_any
         
         return True
     else:
@@ -165,11 +180,23 @@ def main():
         console.print("2. Убедитесь, что домены в Caddyfile совпадают с доменами в сертификатах")
         console.print("3. Проверьте срок действия сертификатов")
     else:
-        console.print("[yellow]⚠ Сертификаты не найдены[/yellow]")
-        console.print("\n[cyan]Варианты решения:[/cyan]")
-        console.print("1. Подождите сброса rate limit Let's Encrypt (обычно через несколько часов/дней)")
-        console.print("2. Используйте самоподписанные сертификаты (tls internal) - временное решение")
-        console.print("3. Включите прямой доступ через порты: python3 enable_direct_ports.py")
+        console.print("[yellow]⚠ Сертификаты для доменов не найдены в volume[/yellow]")
+        console.print("[yellow]⚠ Найдены только ключи аккаунта Let's Encrypt[/yellow]")
+        console.print("\n[cyan]💡 Причина:[/cyan]")
+        console.print("Rate limit Let's Encrypt достигнут - нельзя получить новые сертификаты")
+        console.print("Сертификаты для доменов отсутствуют или были удалены")
+        console.print("\n[bold cyan]🔧 Варианты решения:[/bold cyan]")
+        console.print("\n[cyan]1. Включить прямой доступ через порты (рекомендуется сейчас):[/cyan]")
+        console.print("   python3 enable_direct_ports.py")
+        console.print("   docker-compose up -d")
+        console.print("   # Сервисы будут доступны: http://localhost:ПОРТ")
+        console.print("\n[cyan]2. Подождать сброса rate limit Let's Encrypt:[/cyan]")
+        console.print("   - n8n: после 2025-12-12 06:57:11 UTC")
+        console.print("   - langflow: после 2025-12-12 00:22:28 UTC")
+        console.print("   - supabase: после 2025-12-12 07:09:29 UTC")
+        console.print("\n[cyan]3. Использовать самоподписанные сертификаты (временно):[/cyan]")
+        console.print("   # Добавьте 'tls internal' в каждый блок домена в Caddyfile")
+        console.print("   # Затем: docker-compose restart caddy")
     
     console.print("\n[cyan]📌 Полезные команды:[/cyan]")
     console.print("  - Просмотр логов: docker-compose logs -f caddy")
