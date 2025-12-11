@@ -357,11 +357,9 @@ def start_n8n():
                 console.print(f"  [green]✓[/green] N8N: http://localhost:{port}")
             
             console.print("\n[yellow]💡 При первом запуске N8N создаст учетную запись администратора[/yellow]")
-            
-        except subprocess.CalledProcessError as e:
-            console.print(f"[red]❌ Ошибка при запуске N8N:[/red]")
-            console.print(f"[red]{e.stderr}[/red]")
-            console.print("\n[yellow]Попробуйте запустить вручную:[/yellow]")
+        else:
+            console.print("[red]❌ Ошибка при запуске N8N[/red]")
+            console.print("\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
             console.print("[dim]docker-compose up -d n8n[/dim]")
 
 

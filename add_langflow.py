@@ -357,34 +357,9 @@ def start_langflow():
                 console.print("[yellow]💡 Проверьте логи если страница не загружается: docker-compose logs langflow[/yellow]")
             except Exception as e:
                 console.print(f"[yellow]⚠️  Не удалось получить информацию о доступе: {e}[/yellow]")
-            
-            # Показываем информацию о доступе
-            console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
-            config = dotenv_values(".env")
-            routing_mode = config.get('ROUTING_MODE', '')
-            
-            if routing_mode == 'subdomain':
-                domain = config.get('LANGFLOW_DOMAIN', '')
-                if domain:
-                    protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
-                    console.print(f"  [green]✓[/green] Langflow: {protocol}://{domain}")
-            elif routing_mode == 'path':
-                base_domain = config.get('BASE_DOMAIN', '')
-                langflow_path = config.get('LANGFLOW_PATH', '/langflow')
-                if base_domain:
-                    protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
-                    console.print(f"  [green]✓[/green] Langflow: {protocol}://{base_domain}{langflow_path}")
-            else:
-                port = config.get('LANGFLOW_PORT', '7860')
-                console.print(f"  [green]✓[/green] Langflow: http://localhost:{port}")
-            
-            console.print("\n[yellow]💡 При первом запуске Langflow может занять несколько минут для инициализации[/yellow]")
-            console.print("[yellow]💡 Проверьте логи если страница не загружается: docker-compose logs langflow[/yellow]")
-            
-        except subprocess.CalledProcessError as e:
-            console.print(f"[red]❌ Ошибка при запуске Langflow:[/red]")
-            console.print(f"[red]{e.stderr}[/red]")
-            console.print("\n[yellow]Попробуйте запустить вручную:[/yellow]")
+        else:
+            console.print("[red]❌ Ошибка при запуске Langflow[/red]")
+            console.print("\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
             console.print("[dim]docker-compose up -d langflow[/dim]")
 
 

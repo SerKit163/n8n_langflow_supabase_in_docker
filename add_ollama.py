@@ -326,42 +326,38 @@ def start_ollama():
     console.print("\n[cyan]🚀 Запуск Ollama...[/cyan]")
     
     if Confirm.ask("Запустить Ollama сейчас?", default=True):
-        try:
-            result = subprocess.run(
-                ["docker-compose", "up", "-d", "ollama"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+        # Используем docker_compose_up для показа прогресса загрузки образов
+        if docker_compose_up(detach=True):
             console.print("[green]✓ Ollama запущен![/green]")
             
             # Показываем информацию о доступе
             console.print("\n[cyan]📋 Информация для доступа:[/cyan]")
-            config = dotenv_values(".env")
-            routing_mode = config.get('ROUTING_MODE', '')
-            
-            if routing_mode == 'subdomain':
-                domain = config.get('OLLAMA_DOMAIN', '')
-                if domain:
-                    protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
-                    console.print(f"  [green]✓[/green] Ollama: {protocol}://{domain}")
-            elif routing_mode == 'path':
-                base_domain = config.get('BASE_DOMAIN', '')
-                ollama_path = config.get('OLLAMA_PATH', '/ollama')
-                if base_domain:
-                    protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
-                    console.print(f"  [green]✓[/green] Ollama: {protocol}://{base_domain}{ollama_path}")
-            else:
-                port = config.get('OLLAMA_PORT', '11434')
-                console.print(f"  [green]✓[/green] Ollama: http://localhost:{port}")
-            
-            console.print("\n[yellow]💡 После запуска Ollama вы можете скачать модели командой:[/yellow]")
-            console.print("[dim]docker exec -it ollama ollama pull llama2[/dim]")
-            
-        except subprocess.CalledProcessError as e:
-            console.print(f"[red]❌ Ошибка при запуске Ollama:[/red]")
-            console.print(f"[red]{e.stderr}[/red]")
-            console.print("\n[yellow]Попробуйте запустить вручную:[/yellow]")
+            try:
+                config = dotenv_values(".env")
+                routing_mode = config.get('ROUTING_MODE', '')
+                
+                if routing_mode == 'subdomain':
+                    domain = config.get('OLLAMA_DOMAIN', '')
+                    if domain:
+                        protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
+                        console.print(f"  [green]✓[/green] Ollama: {protocol}://{domain}")
+                elif routing_mode == 'path':
+                    base_domain = config.get('BASE_DOMAIN', '')
+                    ollama_path = config.get('OLLAMA_PATH', '/ollama')
+                    if base_domain:
+                        protocol = 'https' if config.get('SSL_ENABLED', 'true').lower() == 'true' else 'http'
+                        console.print(f"  [green]✓[/green] Ollama: {protocol}://{base_domain}{ollama_path}")
+                else:
+                    port = config.get('OLLAMA_PORT', '11434')
+                    console.print(f"  [green]✓[/green] Ollama: http://localhost:{port}")
+                
+                console.print("\n[yellow]💡 После запуска Ollama вы можете скачать модели командой:[/yellow]")
+                console.print("[dim]docker exec -it ollama ollama pull llama2[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Не удалось получить информацию о доступе: {e}[/yellow]")
+        else:
+            console.print("[red]❌ Ошибка при запуске Ollama[/red]")
+            console.print("\n[yellow]💡 Попробуйте запустить вручную:[/yellow]")
             console.print("[dim]docker-compose up -d ollama[/dim]")
 
 
