@@ -95,7 +95,7 @@ def update_from_github():
         )
         if result.stdout.strip():
             console.print("[yellow]⚠ У вас есть незакоммиченные изменения![/yellow]")
-            if not Confirm.ask("Продолжить? (изменения могут быть потеряны)", default=False):
+            if not Confirm.ask("Продолжить? (изменения могут быть потеряны)", default=True):
                 return False
     except Exception as e:
         console.print(f"[yellow]⚠ Не удалось проверить статус: {e}[/yellow]")
