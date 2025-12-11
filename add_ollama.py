@@ -13,6 +13,7 @@ from installer.hardware_detector import detect_hardware
 from installer.config_adaptor import adapt_config_for_hardware
 from installer.config_generator import generate_docker_compose, generate_caddyfile, generate_env_file
 from installer.utils import ensure_dir
+from installer.validator import validate_domain, validate_path
 import subprocess
 
 console = Console()
@@ -99,26 +100,138 @@ def configure_ollama(hardware, existing_config):
     # Настройка домена/пути в зависимости от режима маршрутизации
     if routing_mode == 'subdomain':
         console.print("\n[cyan]🌐 Настройка домена для Ollama:[/cyan]")
-        ollama_domain = Prompt.ask(
-            "Домен для Ollama (например, ollama.example.com)",
-            default=""
+        
+        # Извлекаем базовый домен из существующих доменов
+        base_domain = None
+        existing_domains = [
+            existing_config.get('SUPABASE_DOMAIN', ''),
+            existing_config.get('N8N_DOMAIN', ''),
+            existing_config.get('LANGFLOW_DOMAIN', '')
+        ]
+        for domain in existing_domains:
+            if domain:
+                # Извлекаем базовый домен (убираем поддомен)
+                parts = domain.split('.')
+                if len(parts) >= 2:
+                    base_domain = '.'.join(parts[1:])  # Берем все после первой части
+                    break
+        
+        # Предлагаем автоматический или ручной режим
+        use_auto = Confirm.ask(
+            "Автоматически сформировать поддомен для Ollama?",
+            default=True
         )
-        if ollama_domain:
-            ollama_config['ollama_domain'] = ollama_domain
+        
+        if use_auto and base_domain:
+            # АВТОМАТИЧЕСКИЙ РЕЖИМ
+            auto_domain = f"ollama.{base_domain}"
+            console.print(f"\n[green]✓ Предложенный домен: {auto_domain}[/green]")
+            if Confirm.ask(f"Использовать домен {auto_domain}?", default=True):
+                ollama_config['ollama_domain'] = auto_domain
+            else:
+                # Ручной ввод
+                while True:
+                    ollama_domain = Prompt.ask(
+                        "Домен для Ollama (например, ollama.example.com) или '-' для пропуска",
+                        default=existing_config.get('OLLAMA_DOMAIN', auto_domain)
+                    )
+                    if ollama_domain == '-':
+                        console.print("[yellow]⚠️  Домен не указан, Ollama будет доступен только по IP:порт[/yellow]")
+                        break
+                    is_valid, error = validate_domain(ollama_domain)
+                    if is_valid:
+                        ollama_config['ollama_domain'] = ollama_domain
+                        break
+                    else:
+                        console.print(f"[red]❌ {error}[/red]")
         else:
-            console.print("[yellow]⚠️  Домен не указан, Ollama будет доступен только по IP:порт[/yellow]")
+            # РУЧНОЙ РЕЖИМ
+            while True:
+                ollama_domain = Prompt.ask(
+                    "Домен для Ollama (например, ollama.example.com) или '-' для пропуска",
+                    default=existing_config.get('OLLAMA_DOMAIN', '')
+                )
+                if ollama_domain == '-':
+                    console.print("[yellow]⚠️  Домен не указан, Ollama будет доступен только по IP:порт[/yellow]")
+                    break
+                is_valid, error = validate_domain(ollama_domain)
+                if is_valid:
+                    ollama_config['ollama_domain'] = ollama_domain
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
     elif routing_mode == 'path':
         console.print("\n[cyan]🌐 Настройка пути для Ollama:[/cyan]")
         base_domain = existing_config.get('BASE_DOMAIN', '')
+        
         if base_domain:
-            ollama_path = Prompt.ask(
-                "Путь для Ollama",
-                default="/ollama"
+            # Предлагаем автоматический или ручной режим
+            use_auto = Confirm.ask(
+                "Автоматически использовать путь /ollama?",
+                default=True
             )
-            ollama_config['ollama_path'] = ollama_path
-            ollama_config['base_domain'] = base_domain
+            
+            if use_auto:
+                # АВТОМАТИЧЕСКИЙ РЕЖИМ
+                auto_path = '/ollama'
+                console.print(f"\n[green]✓ Предложенный путь: {base_domain}{auto_path}[/green]")
+                if Confirm.ask(f"Использовать путь {auto_path}?", default=True):
+                    ollama_config['ollama_path'] = auto_path
+                    ollama_config['base_domain'] = base_domain
+                else:
+                    # Ручной ввод
+                    while True:
+                        ollama_path = Prompt.ask(
+                            "Путь для Ollama (например, /ollama)",
+                            default=existing_config.get('OLLAMA_PATH', '/ollama')
+                        )
+                        is_valid, error = validate_path(ollama_path)
+                        if is_valid:
+                            ollama_config['ollama_path'] = ollama_path
+                            ollama_config['base_domain'] = base_domain
+                            break
+                        else:
+                            console.print(f"[red]❌ {error}[/red]")
+            else:
+                # РУЧНОЙ РЕЖИМ
+                while True:
+                    ollama_path = Prompt.ask(
+                        "Путь для Ollama (например, /ollama)",
+                        default=existing_config.get('OLLAMA_PATH', '/ollama')
+                    )
+                    is_valid, error = validate_path(ollama_path)
+                    if is_valid:
+                        ollama_config['ollama_path'] = ollama_path
+                        ollama_config['base_domain'] = base_domain
+                        break
+                    else:
+                        console.print(f"[red]❌ {error}[/red]")
         else:
             console.print("[yellow]⚠️  BASE_DOMAIN не найден в конфигурации[/yellow]")
+            console.print("[yellow]💡 Укажите базовый домен для режима путей[/yellow]")
+            while True:
+                base_domain = Prompt.ask("Базовый домен (например, example.com) или '-' для пропуска", default="-")
+                if base_domain == '-':
+                    break
+                is_valid, error = validate_domain(base_domain)
+                if is_valid:
+                    ollama_config['base_domain'] = base_domain
+                    # Предлагаем путь
+                    use_auto = Confirm.ask("Автоматически использовать путь /ollama?", default=True)
+                    if use_auto:
+                        ollama_config['ollama_path'] = '/ollama'
+                    else:
+                        while True:
+                            ollama_path = Prompt.ask("Путь для Ollama", default="/ollama")
+                            is_valid, error = validate_path(ollama_path)
+                            if is_valid:
+                                ollama_config['ollama_path'] = ollama_path
+                                break
+                            else:
+                                console.print(f"[red]❌ {error}[/red]")
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
     else:
         console.print("\n[cyan]🔌 Настройка порта для Ollama:[/cyan]")
         ollama_port = IntPrompt.ask(

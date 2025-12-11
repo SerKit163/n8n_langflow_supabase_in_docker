@@ -13,6 +13,7 @@ from installer.hardware_detector import detect_hardware
 from installer.config_adaptor import adapt_config_for_hardware
 from installer.config_generator import generate_docker_compose, generate_caddyfile, generate_env_file
 from installer.utils import ensure_dir
+from installer.validator import validate_domain, validate_path
 import subprocess
 
 console = Console()
@@ -72,26 +73,138 @@ def configure_n8n(hardware, existing_config):
     # Настройка домена/пути в зависимости от режима маршрутизации
     if routing_mode == 'subdomain':
         console.print("\n[cyan]🌐 Настройка домена для N8N:[/cyan]")
-        n8n_domain = Prompt.ask(
-            "Домен для N8N (например, n8n.example.com)",
-            default=existing_config.get('N8N_DOMAIN', '')
+        
+        # Извлекаем базовый домен из существующих доменов
+        base_domain = None
+        existing_domains = [
+            existing_config.get('SUPABASE_DOMAIN', ''),
+            existing_config.get('LANGFLOW_DOMAIN', ''),
+            existing_config.get('OLLAMA_DOMAIN', '')
+        ]
+        for domain in existing_domains:
+            if domain:
+                # Извлекаем базовый домен (убираем поддомен)
+                parts = domain.split('.')
+                if len(parts) >= 2:
+                    base_domain = '.'.join(parts[1:])  # Берем все после первой части
+                    break
+        
+        # Предлагаем автоматический или ручной режим
+        use_auto = Confirm.ask(
+            "Автоматически сформировать поддомен для N8N?",
+            default=True
         )
-        if n8n_domain:
-            n8n_config['n8n_domain'] = n8n_domain
+        
+        if use_auto and base_domain:
+            # АВТОМАТИЧЕСКИЙ РЕЖИМ
+            auto_domain = f"n8n.{base_domain}"
+            console.print(f"\n[green]✓ Предложенный домен: {auto_domain}[/green]")
+            if Confirm.ask(f"Использовать домен {auto_domain}?", default=True):
+                n8n_config['n8n_domain'] = auto_domain
+            else:
+                # Ручной ввод
+                while True:
+                    n8n_domain = Prompt.ask(
+                        "Домен для N8N (например, n8n.example.com) или '-' для пропуска",
+                        default=existing_config.get('N8N_DOMAIN', auto_domain)
+                    )
+                    if n8n_domain == '-':
+                        console.print("[yellow]⚠️  Домен не указан, N8N будет доступен только по IP:порт[/yellow]")
+                        break
+                    is_valid, error = validate_domain(n8n_domain)
+                    if is_valid:
+                        n8n_config['n8n_domain'] = n8n_domain
+                        break
+                    else:
+                        console.print(f"[red]❌ {error}[/red]")
         else:
-            console.print("[yellow]⚠️  Домен не указан, N8N будет доступен только по IP:порт[/yellow]")
+            # РУЧНОЙ РЕЖИМ
+            while True:
+                n8n_domain = Prompt.ask(
+                    "Домен для N8N (например, n8n.example.com) или '-' для пропуска",
+                    default=existing_config.get('N8N_DOMAIN', '')
+                )
+                if n8n_domain == '-':
+                    console.print("[yellow]⚠️  Домен не указан, N8N будет доступен только по IP:порт[/yellow]")
+                    break
+                is_valid, error = validate_domain(n8n_domain)
+                if is_valid:
+                    n8n_config['n8n_domain'] = n8n_domain
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
     elif routing_mode == 'path':
         console.print("\n[cyan]🌐 Настройка пути для N8N:[/cyan]")
         base_domain = existing_config.get('BASE_DOMAIN', '')
+        
         if base_domain:
-            n8n_path = Prompt.ask(
-                "Путь для N8N",
-                default=existing_config.get('N8N_PATH', '/n8n')
+            # Предлагаем автоматический или ручной режим
+            use_auto = Confirm.ask(
+                "Автоматически использовать путь /n8n?",
+                default=True
             )
-            n8n_config['n8n_path'] = n8n_path
-            n8n_config['base_domain'] = base_domain
+            
+            if use_auto:
+                # АВТОМАТИЧЕСКИЙ РЕЖИМ
+                auto_path = '/n8n'
+                console.print(f"\n[green]✓ Предложенный путь: {base_domain}{auto_path}[/green]")
+                if Confirm.ask(f"Использовать путь {auto_path}?", default=True):
+                    n8n_config['n8n_path'] = auto_path
+                    n8n_config['base_domain'] = base_domain
+                else:
+                    # Ручной ввод
+                    while True:
+                        n8n_path = Prompt.ask(
+                            "Путь для N8N (например, /n8n)",
+                            default=existing_config.get('N8N_PATH', '/n8n')
+                        )
+                        is_valid, error = validate_path(n8n_path)
+                        if is_valid:
+                            n8n_config['n8n_path'] = n8n_path
+                            n8n_config['base_domain'] = base_domain
+                            break
+                        else:
+                            console.print(f"[red]❌ {error}[/red]")
+            else:
+                # РУЧНОЙ РЕЖИМ
+                while True:
+                    n8n_path = Prompt.ask(
+                        "Путь для N8N (например, /n8n)",
+                        default=existing_config.get('N8N_PATH', '/n8n')
+                    )
+                    is_valid, error = validate_path(n8n_path)
+                    if is_valid:
+                        n8n_config['n8n_path'] = n8n_path
+                        n8n_config['base_domain'] = base_domain
+                        break
+                    else:
+                        console.print(f"[red]❌ {error}[/red]")
         else:
             console.print("[yellow]⚠️  BASE_DOMAIN не найден в конфигурации[/yellow]")
+            console.print("[yellow]💡 Укажите базовый домен для режима путей[/yellow]")
+            while True:
+                base_domain = Prompt.ask("Базовый домен (например, example.com) или '-' для пропуска", default="-")
+                if base_domain == '-':
+                    break
+                is_valid, error = validate_domain(base_domain)
+                if is_valid:
+                    n8n_config['base_domain'] = base_domain
+                    # Предлагаем путь
+                    use_auto = Confirm.ask("Автоматически использовать путь /n8n?", default=True)
+                    if use_auto:
+                        n8n_config['n8n_path'] = '/n8n'
+                    else:
+                        while True:
+                            n8n_path = Prompt.ask("Путь для N8N", default="/n8n")
+                            is_valid, error = validate_path(n8n_path)
+                            if is_valid:
+                                n8n_config['n8n_path'] = n8n_path
+                                break
+                            else:
+                                console.print(f"[red]❌ {error}[/red]")
+                    break
+                else:
+                    console.print(f"[red]❌ {error}[/red]")
     else:
         console.print("\n[cyan]🔌 Настройка порта для N8N:[/cyan]")
         n8n_port = IntPrompt.ask(
