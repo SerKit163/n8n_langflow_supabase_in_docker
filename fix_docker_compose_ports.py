@@ -33,24 +33,35 @@ def fix_docker_compose():
     ]
     
     for service_name, external_port, internal_port in services:
-        # Ищем блок сервиса
-        # Паттерн: от начала сервиса до deploy (или следующего сервиса)
-        pattern = rf'(\s+{service_name}:[^\n]*\n)((?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)(deploy:|volumes:|networks:)'
+        # Ищем блок сервиса - от начала сервиса до следующей секции
+        # Паттерн: находим весь блок сервиса до следующей секции (deploy, volumes, networks, restart)
+        pattern = rf'(\s+{service_name}:[^\n]*\n)((?:(?!\s+[a-z-]+:)[^\n]*\n)*?)(\s+)(deploy:|volumes:|networks:|restart:)'
         
         def replace_service(match):
-            service_header = match.group(1)
-            service_body = match.group(2)
-            indent = match.group(3)
-            next_section = match.group(4)
+            service_header = match.group(1)  # "  n8n:\n"
+            service_body = match.group(2)  # Все что между заголовком и следующей секцией
+            indent = match.group(3)  # Отступ (обычно 4 пробела)
+            next_section = match.group(4)  # "deploy:" или другая секция
             
-            # Проверяем, есть ли уже секция ports
-            if 'ports:' in service_body and not service_body.strip().startswith('#'):
+            # Проверяем, есть ли уже незакомментированная секция ports
+            if re.search(rf'^{indent}ports:\s*$', service_body, re.MULTILINE):
                 # Порты уже есть, пропускаем
                 return match.group(0)
             
-            # Удаляем закомментированные ports если есть
-            service_body = re.sub(rf'{indent}#.*[пп]орт.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?', '', service_body, flags=re.MULTILINE)
-            service_body = re.sub(rf'{indent}# ВАЖНО: Не открываем порт.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?', '', service_body, flags=re.MULTILINE)
+            # Удаляем все закомментированные секции ports
+            # Удаляем комментарии о портах
+            service_body = re.sub(
+                rf'{indent}#.*[пп]орт.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?',
+                '',
+                service_body,
+                flags=re.MULTILINE | re.IGNORECASE
+            )
+            service_body = re.sub(
+                rf'{indent}# ВАЖНО:.*\n{indent}#\s+ports:\n{indent}#\s+- "[^"]+":\d+\n?',
+                '',
+                service_body,
+                flags=re.MULTILINE | re.IGNORECASE
+            )
             
             # Добавляем секцию ports перед следующей секцией
             ports_section = f'{indent}# Прямой доступ через порт (fallback при проблемах с SSL)\n{indent}ports:\n{indent}  - "{external_port}:{internal_port}"\n'
@@ -68,8 +79,9 @@ def fix_docker_compose():
     if content != original_content:
         # Сохраняем резервную копию
         backup_path = compose_path.with_suffix('.yml.backup')
-        backup_path.write_text(original_content, encoding='utf-8')
-        console.print(f"[cyan]📋 Создана резервная копия: {backup_path}[/cyan]")
+        if compose_path.exists():
+            backup_path.write_text(original_content, encoding='utf-8')
+            console.print(f"[cyan]📋 Создана резервная копия: {backup_path.name}[/cyan]")
         
         # Сохраняем исправленный файл
         compose_path.write_text(content, encoding='utf-8')
