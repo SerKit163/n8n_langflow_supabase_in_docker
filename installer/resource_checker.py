@@ -27,22 +27,35 @@ def check_resources(hardware: Dict, config: Dict) -> tuple[bool, List[str], List
     total_ram = hardware['ram']['total_gb']
     available_ram = hardware['ram']['available_gb']
     
-    # Проверяем общую RAM VPS (это реальный лимит)
-    if required_ram > total_ram:
+    # Запас для системы (операционная система, Docker, другие процессы)
+    # Минимум 1GB, но если RAM больше 8GB, то 2GB запаса
+    system_reserve = 2.0 if total_ram >= 8 else 1.0
+    
+    # Общая требуемая RAM = RAM для сервисов + запас для системы
+    total_required_ram = required_ram + system_reserve
+    
+    # Проверяем общую RAM VPS с учетом запаса для системы
+    if total_required_ram > total_ram:
+        # Критическая ошибка только если требуемая RAM + запас > общей RAM
         errors.append(
             f"❌ Недостаточно RAM на VPS!\n"
-            f"   Требуется: {required_ram:.1f} GB\n"
+            f"   Требуется для сервисов: {required_ram:.1f} GB\n"
+            f"   Запас для системы: {system_reserve:.1f} GB\n"
+            f"   Всего требуется: {total_required_ram:.1f} GB\n"
             f"   Всего на VPS: {total_ram:.1f} GB\n"
-            f"   Необходимо увеличить RAM VPS на: {required_ram - total_ram:.1f} GB"
+            f"   Необходимо увеличить RAM VPS на: {total_required_ram - total_ram:.1f} GB"
         )
-    elif required_ram > total_ram * 0.85:
+    elif total_required_ram > total_ram * 0.9:
+        # Предупреждение если используется более 90% RAM (с учетом запаса)
         warnings.append(
             f"⚠ Мало RAM на VPS!\n"
-            f"   Требуется: {required_ram:.1f} GB\n"
+            f"   Требуется для сервисов: {required_ram:.1f} GB\n"
+            f"   Запас для системы: {system_reserve:.1f} GB\n"
+            f"   Всего требуется: {total_required_ram:.1f} GB\n"
             f"   Всего на VPS: {total_ram:.1f} GB\n"
-            f"   Рекомендуется иметь запас минимум 1-2 GB для системы"
+            f"   Рекомендуется иметь запас минимум {system_reserve:.1f} GB для системы"
         )
-    # Дополнительное предупреждение если свободной RAM мало
+    # Дополнительное предупреждение если свободной RAM мало в данный момент
     elif available_ram < 1.0:
         warnings.append(
             f"⚠ Мало свободной RAM в данный момент!\n"
