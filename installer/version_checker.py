@@ -52,32 +52,27 @@ def get_latest_version(image_name: str) -> Optional[str]:
         image_name: Имя образа (например, 'n8nio/n8n')
         
     Returns:
-        Последняя версия или None
+        Последняя версия или None (возвращает 'latest' для большинства образов)
     """
-    try:
-        # Docker Hub API
-        url = f"https://hub.docker.com/v2/repositories/{image_name}/tags"
-        params = {'page_size': 1, 'ordering': '-last_updated'}
-        
-        response = requests.get(url, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('results'):
-                # Ищем latest или первую версию
-                for tag in data['results']:
-                    tag_name = tag.get('name', '')
-                    if tag_name == 'latest' or re.match(r'^\d+\.\d+', tag_name):
-                        return tag_name
-                
-                # Если не нашли, берем первый
-                if data['results']:
-                    return data['results'][0].get('name', 'latest')
-        
-        return 'latest'
-    except Exception as e:
-        console.print(f"[yellow]Не удалось проверить версию {image_name}: {e}[/yellow]")
-        return None
+    # Для большинства образов используем 'latest'
+    # Это безопаснее, чем пытаться определить конкретную версию
+    # которая может быть неправильной
+    
+    # Исключения - образы, которые должны иметь конкретные версии
+    fixed_versions = {
+        'ghcr.io/supabase/postgres': '15.1.0.119',
+        'ghcr.io/supabase/gotrue': 'v2.162.0',
+        'ghcr.io/supabase/postgrest': 'v12.2.0',
+        'ghcr.io/supabase/studio': '20240513-d025e0f',
+    }
+    
+    # Проверяем, есть ли фиксированная версия
+    for fixed_image, fixed_version in fixed_versions.items():
+        if fixed_image in image_name:
+            return fixed_version
+    
+    # Для остальных используем 'latest'
+    return 'latest'
 
 
 def check_updates(current_versions: Dict[str, str]) -> Dict[str, Dict]:
