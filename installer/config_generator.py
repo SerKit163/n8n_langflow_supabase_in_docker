@@ -305,7 +305,28 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
     langflow_enabled = config.get('langflow_enabled', True)
     # Supabase всегда включен
     
+    # URL-кодируем пароль PostgreSQL для использования в connection string
+    # Это необходимо для правильной обработки специальных символов (!, %, @ и т.д.)
+    from urllib.parse import quote_plus
+    postgres_password = config.get('postgres_password', '')
+    postgres_password_encoded = quote_plus(postgres_password) if postgres_password else ''
+    
+    # Генерируем connection string с URL-кодированным паролем
+    if postgres_password_encoded:
+        postgres_connection_url = f"postgresql://postgres:{postgres_password_encoded}@supabase-db:5432/postgres"
+    else:
+        postgres_connection_url = "postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres"
+    
+    # Заменяем connection strings в шаблоне на URL-кодированные версии
     import re
+    # Заменяем все connection strings с ${POSTGRES_PASSWORD} на URL-кодированную версию
+    if postgres_password_encoded:
+        # Заменяем только в connection strings (не в переменных окружения POSTGRES_PASSWORD)
+        content = re.sub(
+            r'postgresql://postgres:\$\{POSTGRES_PASSWORD\}@supabase-db:5432/postgres',
+            postgres_connection_url,
+            content
+        )
     
     # Удаляем невыбранные сервисы
     if not n8n_enabled:
