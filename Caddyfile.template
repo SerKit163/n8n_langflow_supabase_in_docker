@@ -30,8 +30,10 @@
         transport http {
             dial_timeout 30s
             response_header_timeout 120s
-            response_body_timeout 300s
         }
+        
+        # Увеличиваем общий таймаут для длительных запросов AI агентов
+        timeout 300s
     }
 }
 
