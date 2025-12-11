@@ -89,12 +89,16 @@ def main():
     # 1. Останавливаем Caddy
     run_command("docker-compose stop caddy", "Остановка Caddy")
     
-    # 2. Очищаем старые сертификаты из volume (только проблемные)
+    # 2. Очищаем старые проблемные сертификаты из volume
     console.print("\n[cyan]🧹 Очистка проблемных сертификатов...[/cyan]")
-    run_command(
-        "docker-compose run --rm caddy sh -c 'rm -rf /data/caddy/acme/*'",
-        "Очистка кеша ACME сертификатов"
-    )
+    console.print("[yellow]⚠ Это удалит старые сертификаты, Caddy получит новые от Let's Encrypt[/yellow]")
+    if console.input("[cyan]Продолжить очистку? (y/n): [/cyan]").lower().startswith('y'):
+        run_command(
+            "docker-compose run --rm caddy sh -c 'rm -rf /data/caddy/acme/*'",
+            "Очистка кеша ACME сертификатов"
+        )
+    else:
+        console.print("[yellow]Очистка пропущена[/yellow]")
     
     # 3. Перегенерируем Caddyfile
     console.print("\n[cyan]📝 Перегенерация Caddyfile...[/cyan]")
@@ -120,9 +124,10 @@ def main():
     console.print("   - Mac: sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder")
     console.print("   - Linux: sudo systemd-resolve --flush-caches")
     console.print("   - Windows: ipconfig /flushdns")
-    console.print("4. Попробуйте открыть сайт в браузере")
-    console.print("5. Если браузер показывает предупреждение о сертификате - это нормально для самоподписанных сертификатов")
-    console.print("6. Нажмите 'Advanced' → 'Proceed to site' в браузере")
+    console.print("4. Подождите 1-2 минуты, пока Caddy получит сертификаты от Let's Encrypt")
+    console.print("5. Проверьте логи: docker-compose logs -f caddy")
+    console.print("6. Попробуйте открыть сайт в браузере")
+    console.print("7. Если Caddy не может получить сертификат из-за rate limit, подождите несколько часов")
     console.print("\n[yellow]⚠ Если проблема сохраняется:[/yellow]")
     console.print("- Убедитесь, что email в .env настоящий (не фейковый)")
     console.print("- Проверьте, что порты 80 и 443 открыты на сервере")

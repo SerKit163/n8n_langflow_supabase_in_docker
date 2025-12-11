@@ -1,14 +1,11 @@
 {
     email {CADDY_EMAIL}
-    auto_https disable_redirects
-    # Используем самоподписанные сертификаты если Let's Encrypt недоступен
-    local_certs
+    # Caddy автоматически получает сертификаты от Let's Encrypt
+    # и перенаправляет HTTP на HTTPS
 }
 
 # N8N
 {N8N_DOMAIN} {
-    # Используем самоподписанный сертификат если Let's Encrypt недоступен
-    tls internal
     reverse_proxy n8n:5678 {
         header_up Host {host}
     }
@@ -16,16 +13,8 @@
 
 # Langflow
 {LANGFLOW_DOMAIN} {
-    # Используем самоподписанный сертификат если Let's Encrypt недоступен
-    tls internal
     reverse_proxy langflow:7860 {
-        # Передаем заголовок Host для правильной работы прокси
         header_up Host {host}
-        
-        # WebSocket поддержка для Langflow (Caddy автоматически обрабатывает WebSocket)
-        # Явно передаем заголовки для совместимости
-        header_up Connection {http.request.header.Connection}
-        header_up Upgrade {http.request.header.Upgrade}
         
         # Увеличиваем таймауты для Langflow (для работы с AI агентами)
         transport http {
@@ -39,8 +28,6 @@
 
 # Supabase Studio
 {SUPABASE_DOMAIN} {
-    # Используем самоподписанный сертификат если Let's Encrypt недоступен
-    tls internal
     basic_auth {
         {SUPABASE_ADMIN_LOGIN} {SUPABASE_ADMIN_PASSWORD_HASH}
     }
@@ -51,8 +38,6 @@
 
 # Ollama (если включен)
 {OLLAMA_DOMAIN} {
-    # Используем самоподписанный сертификат если Let's Encrypt недоступен
-    tls internal
     reverse_proxy ollama:11434 {
         header_up Host {host}
     }
