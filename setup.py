@@ -422,6 +422,7 @@ def select_services() -> dict:
     """Выбор сервисов для установки"""
     console.print("\n[cyan]📦 Выбор сервисов для установки[/cyan]")
     console.print("\n[yellow]💡 Supabase обязателен (содержит базу данных PostgreSQL)[/yellow]")
+    console.print("[yellow]💡 N8N и Langflow можно добавить позже через скрипты add_n8n.py и add_langflow.py[/yellow]")
     
     services_selection = {
         'n8n_enabled': False,
@@ -433,23 +434,14 @@ def select_services() -> dict:
     # Выбор n8n
     services_selection['n8n_enabled'] = Confirm.ask(
         "\n[cyan]Установить N8N?[/cyan] (автоматизация рабочих процессов)",
-        default=True
+        default=False
     )
     
     # Выбор Langflow
     services_selection['langflow_enabled'] = Confirm.ask(
         "[cyan]Установить Langflow?[/cyan] (визуальный конструктор ИИ агентов)",
-        default=True
+        default=False
     )
-    
-    # Проверка что хотя бы один опциональный сервис выбран
-    if not services_selection['n8n_enabled'] and not services_selection['langflow_enabled']:
-        console.print("\n[red]❌ Ошибка: Должен быть выбран хотя бы один сервис (n8n или langflow)![/red]")
-        console.print("[yellow]💡 Supabase обязателен, но он только база данных[/yellow]")
-        if not Confirm.ask("Выбрать n8n и langflow по умолчанию?", default=True):
-            sys.exit(1)
-        services_selection['n8n_enabled'] = True
-        services_selection['langflow_enabled'] = True
     
     # Показываем выбранные сервисы
     console.print("\n[green]✓ Выбранные сервисы:[/green]")
@@ -458,6 +450,11 @@ def select_services() -> dict:
     if services_selection['langflow_enabled']:
         console.print("  • Langflow")
     console.print("  • Supabase (обязательно)")
+    
+    if not services_selection['n8n_enabled'] and not services_selection['langflow_enabled']:
+        console.print("\n[yellow]💡 Вы можете добавить N8N и Langflow позже:[/yellow]")
+        console.print("  [dim]python3 add_n8n.py[/dim]")
+        console.print("  [dim]python3 add_langflow.py[/dim]")
     
     return services_selection
 
