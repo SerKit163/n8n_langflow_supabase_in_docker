@@ -86,6 +86,8 @@ def update_from_github():
     console.print(f"[cyan]Текущая ветка: {current_branch}[/cyan]")
     
     # Проверяем есть ли изменения
+    has_changes = False
+    changed_files = []
     try:
         result = subprocess.run(
             ['git', 'status', '--porcelain'],
@@ -94,9 +96,54 @@ def update_from_github():
             timeout=5
         )
         if result.stdout.strip():
+            has_changes = True
+            changed_files = [line.split()[1] for line in result.stdout.strip().split('\n') if line.strip()]
             console.print("[yellow]⚠ У вас есть незакоммиченные изменения![/yellow]")
-            if not Confirm.ask("Продолжить? (изменения могут быть потеряны)", default=True):
+            console.print(f"[cyan]Измененные файлы: {', '.join(changed_files[:5])}[/cyan]")
+            if len(changed_files) > 5:
+                console.print(f"[cyan]... и еще {len(changed_files) - 5} файлов[/cyan]")
+            
+            console.print("\n[cyan]Варианты:[/cyan]")
+            console.print("1. Сохранить изменения в stash (рекомендуется)")
+            console.print("2. Отменить изменения (будет потеряно)")
+            console.print("3. Отменить обновление")
+            
+            choice = Prompt.ask(
+                "Выберите действие",
+                choices=["1", "2", "3"],
+                default="1"
+            )
+            
+            if choice == "3":
+                console.print("[yellow]Обновление отменено[/yellow]")
                 return False
+            elif choice == "1":
+                # Сохраняем в stash
+                console.print("[cyan]💾 Сохранение изменений в stash...[/cyan]")
+                stash_result = subprocess.run(
+                    ['git', 'stash', 'push', '-m', 'Автоматический stash перед обновлением с GitHub'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if stash_result.returncode == 0:
+                    console.print("[green]✓ Изменения сохранены в stash[/green]")
+                    console.print("[cyan]💡 Восстановить: git stash pop[/cyan]")
+                else:
+                    console.print("[yellow]⚠ Не удалось сохранить в stash[/yellow]")
+                    if not Confirm.ask("Продолжить без сохранения?", default=False):
+                        return False
+            elif choice == "2":
+                # Отменяем изменения
+                console.print("[yellow]⚠ Отмена всех незакоммиченных изменений...[/yellow]")
+                if not Confirm.ask("Вы уверены? Все изменения будут потеряны!", default=False):
+                    return False
+                subprocess.run(
+                    ['git', 'checkout', '--', '.'],
+                    capture_output=True,
+                    timeout=10
+                )
+                console.print("[green]✓ Изменения отменены[/green]")
     except Exception as e:
         console.print(f"[yellow]⚠ Не удалось проверить статус: {e}[/yellow]")
     
