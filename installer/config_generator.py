@@ -66,6 +66,7 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
     # Для отключенных сервисов используем пустые значения или значения по умолчанию только если включены
     # Заменяем переменные
     replacements = {
+        'PROXY_TYPE': config.get('proxy_type', 'caddy'),
         'ROUTING_MODE': routing_mode,
         'N8N_ENABLED': 'true' if n8n_enabled else 'false',
         'LANGFLOW_ENABLED': 'true' if langflow_enabled else 'false',
@@ -249,6 +250,7 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
     # Определяем какой шаблон использовать
     ollama_enabled = config.get('ollama_enabled', False)
     has_gpu = hardware.get('gpu', {}).get('available', False)
+    proxy_type = config.get('proxy_type', 'caddy')
     
     if has_gpu and ollama_enabled:
         template_name = "docker-compose.gpu.template"
@@ -262,6 +264,13 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         content = generate_base_docker_compose(config, hardware)
         write_file(output_path, content)
         return
+    
+    # Заменяем Caddy на nginx-proxy если нужно
+    if proxy_type == 'nginx-proxy':
+        content = replace_caddy_with_nginx_proxy(content, config)
+        # Добавляем переменные окружения для nginx-proxy
+        if config.get('routing_mode') == 'subdomain':
+            content = add_nginx_proxy_env_vars(content, config)
     
     # ВАЖНО: проверяем что ollama_enabled явно True
     if isinstance(ollama_enabled, str):
@@ -446,6 +455,138 @@ def generate_docker_compose(config: Dict, hardware: Dict, output_path: str = "do
         content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
     
     write_file(output_path, content)
+
+
+def replace_caddy_with_nginx_proxy(content: str, config: Dict) -> str:
+    """Заменяет секцию Caddy на nginx-proxy и acme-companion"""
+    import re
+    
+    # Удаляем секцию caddy
+    caddy_pattern = r'  caddy:.*?(?=\n  [a-z]|\nvolumes:|\Z)'
+    content = re.sub(caddy_pattern, '', content, flags=re.DOTALL)
+    
+    # Удаляем caddy volumes
+    content = re.sub(r'  caddy_data:\s*driver: local\n', '', content)
+    content = re.sub(r'  caddy_config:\s*driver: local\n', '', content)
+    
+    # Определяем ACME CA URI для staging
+    letsencrypt_staging = config.get('letsencrypt_staging', False)
+    acme_ca_uri = 'https://acme-staging-v02.api.letsencrypt.org/directory' if letsencrypt_staging else ''
+    acme_ca_env = f'\n      - ACME_CA_URI={acme_ca_uri}' if acme_ca_uri else ''
+    
+    # Добавляем nginx-proxy и acme-companion перед volumes
+    nginx_proxy_section = f"""  nginx-proxy:
+    image: nginxproxy/nginx-proxy:latest
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - nginx_proxy_certs:/etc/nginx/certs:ro
+      - nginx_proxy_vhost:/etc/nginx/vhost.d
+      - nginx_proxy_html:/usr/share/nginx/html
+    networks:
+      - proxy
+    restart: unless-stopped
+    labels:
+      - "com.github.nginx-proxy.nginx-proxy"
+
+  nginx-proxy-acme:
+    image: nginxproxy/acme-companion:latest
+    container_name: nginx-proxy-acme
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nginx_proxy_certs:/etc/nginx/certs:rw
+      - nginx_proxy_vhost:/etc/nginx/vhost.d
+      - nginx_proxy_html:/usr/share/nginx/html
+      - nginx_proxy_acme:/etc/acme.sh
+    networks:
+      - proxy
+    restart: unless-stopped
+    environment:
+      - DEFAULT_EMAIL=${{LETSENCRYPT_EMAIL:-}}
+      - NGINX_PROXY_CONTAINER=nginx-proxy{acme_ca_env}
+    depends_on:
+      - nginx-proxy
+
+"""
+    
+    # Вставляем перед volumes
+    content = re.sub(r'(\nvolumes:)', r'\n' + nginx_proxy_section + r'\1', content)
+    
+    # Добавляем volumes для nginx-proxy
+    nginx_volumes = """  nginx_proxy_certs:
+    driver: local
+  nginx_proxy_vhost:
+    driver: local
+  nginx_proxy_html:
+    driver: local
+  nginx_proxy_acme:
+    driver: local
+"""
+    # Добавляем volumes после последнего volume или перед networks
+    if '  ollama_data:' in content:
+        content = re.sub(r'(  ollama_data:\s*driver: local\n)', r'\1' + nginx_volumes, content)
+    else:
+        # Если ollama_data нет, добавляем перед networks
+        content = re.sub(r'(\nnetworks:)', r'\n' + nginx_volumes + r'\1', content)
+    
+    return content
+
+
+def add_nginx_proxy_env_vars(content: str, config: Dict) -> str:
+    """Добавляет переменные окружения VIRTUAL_HOST и LETSENCRYPT_HOST для nginx-proxy"""
+    import re
+    
+    n8n_enabled = config.get('n8n_enabled', True)
+    langflow_enabled = config.get('langflow_enabled', True)
+    ollama_enabled = config.get('ollama_enabled', False)
+    
+    n8n_domain = config.get('n8n_domain', '') or ''
+    langflow_domain = config.get('langflow_domain', '') or ''
+    supabase_domain = config.get('supabase_domain', '') or ''
+    ollama_domain = config.get('ollama_domain', '') or ''
+    letsencrypt_email = config.get('letsencrypt_email', '') or ''
+    
+    # Добавляем переменные для n8n
+    if n8n_enabled and n8n_domain:
+        env_vars = f'      - VIRTUAL_HOST={n8n_domain}\n'
+        if letsencrypt_email:
+            env_vars += f'      - LETSENCRYPT_HOST={n8n_domain}\n'
+        # Находим секцию n8n и добавляем после environment
+        pattern = r'(\s+n8n:[^\n]*\n(?:(?!\s+environment:)[^\n]*\n)*?\s+environment:\s*\n)'
+        replacement = r'\1' + env_vars
+        content = re.sub(pattern, replacement, content)
+    
+    # Добавляем переменные для langflow
+    if langflow_enabled and langflow_domain:
+        env_vars = f'      - VIRTUAL_HOST={langflow_domain}\n'
+        if letsencrypt_email:
+            env_vars += f'      - LETSENCRYPT_HOST={langflow_domain}\n'
+        pattern = r'(\s+langflow:[^\n]*\n(?:(?!\s+environment:)[^\n]*\n)*?\s+environment:\s*\n)'
+        replacement = r'\1' + env_vars
+        content = re.sub(pattern, replacement, content)
+    
+    # Добавляем переменные для supabase-studio
+    if supabase_domain:
+        env_vars = f'      - VIRTUAL_HOST={supabase_domain}\n'
+        if letsencrypt_email:
+            env_vars += f'      - LETSENCRYPT_HOST={supabase_domain}\n'
+        pattern = r'(\s+supabase-studio:[^\n]*\n(?:(?!\s+environment:)[^\n]*\n)*?\s+environment:\s*\n)'
+        replacement = r'\1' + env_vars
+        content = re.sub(pattern, replacement, content)
+    
+    # Добавляем переменные для ollama
+    if ollama_enabled and ollama_domain:
+        env_vars = f'      - VIRTUAL_HOST={ollama_domain}\n'
+        if letsencrypt_email:
+            env_vars += f'      - LETSENCRYPT_HOST={ollama_domain}\n'
+        pattern = r'(\s+ollama:[^\n]*\n(?:(?!\s+environment:)[^\n]*\n)*?\s+environment:\s*\n)'
+        replacement = r'\1' + env_vars
+        content = re.sub(pattern, replacement, content)
+    
+    return content
 
 
 def hash_password_for_caddy(password: str) -> str:

@@ -155,6 +155,40 @@ def show_hardware_info(hardware):
     console.print(table)
 
 
+def select_proxy_type() -> str:
+    """Выбор типа прокси-сервера"""
+    console.print("\n[cyan]🔀 Выбор прокси-сервера[/cyan]")
+    
+    options = {
+        '1': 'caddy',
+        '2': 'nginx-proxy'
+    }
+    
+    console.print("""
+  1) Caddy
+     ✓ Автоматический SSL из коробки
+     ✓ Простая настройка через Caddyfile
+     ✓ Поддержка HTTP/3
+     ✓ Работает через SSH туннель (localhost)
+     ⚠ Может быть лимит на сертификаты (7 дней)
+  
+  2) nginx-proxy (старый вариант)
+     ✓ Автоматическая маршрутизация через переменные окружения
+     ✓ Работает через SSH туннель (localhost)
+     ✓ Проверенное решение
+     ⚠ Требует acme-companion для SSL
+     ⚠ Может быть лимит на сертификаты (7 дней)
+""")
+    
+    console.print("\n[yellow]💡 Рекомендация:[/yellow]")
+    console.print("  • Caddy - современное решение, проще в настройке")
+    console.print("  • nginx-proxy - если нужна совместимость со старыми настройками")
+    console.print("  • Оба варианта работают через SSH туннель на localhost\n")
+    
+    choice = Prompt.ask("Ваш выбор", choices=['1', '2'], default='1')
+    return options[choice]
+
+
 def select_routing_mode() -> str:
     """Выбор режима маршрутизации"""
     console.print("\n[cyan]🌐 Выбор режима маршрутизации[/cyan]")
@@ -836,6 +870,9 @@ def main():
                 sys.exit(1)
         
         # 7. Выбор режима маршрутизации
+        # 7.5. Выбор прокси-сервера
+        proxy_type = select_proxy_type()
+        
         routing_mode = select_routing_mode()
         
         # 8. Настройка доменов
@@ -859,6 +896,7 @@ def main():
         # 10. Объединяем конфигурацию
         full_config = {
             'routing_mode': routing_mode,
+            'proxy_type': proxy_type,
             **domains_config,
             **services_config,
             **recommended_config
@@ -895,13 +933,14 @@ def main():
         generate_docker_compose(full_config, hardware)
         console.print("[green]✓ docker-compose.yml создан[/green]")
         
-        # Генерация Caddyfile
-        generate_caddyfile(full_config)
-        console.print("[green]✓ Caddyfile создан[/green]")
-        
-        # nginx-proxy автоматически настраивает маршрутизацию через переменные VIRTUAL_HOST
-        if routing_mode == 'subdomain':
-            console.print("[green]✓ nginx-proxy настроен для автоматической маршрутизации[/green]")
+        # Генерация Caddyfile (только для Caddy)
+        if proxy_type == 'caddy':
+            generate_caddyfile(full_config)
+            console.print("[green]✓ Caddyfile создан[/green]")
+        else:
+            # nginx-proxy автоматически настраивает маршрутизацию через переменные VIRTUAL_HOST
+            if routing_mode == 'subdomain':
+                console.print("[green]✓ nginx-proxy настроен для автоматической маршрутизации[/green]")
         
         # 12. Запуск сервисов
         console.print("\n[cyan]🚀 Готово к запуску![/cyan]")
