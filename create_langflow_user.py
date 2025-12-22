@@ -75,10 +75,10 @@ try:
     
     # Создаем пользователя
     now = datetime.utcnow().isoformat()
-    cursor.execute("""
-        INSERT INTO user (username, password, is_superuser, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (username, password_hash, True, True, now, now))
+    cursor.execute(
+        "INSERT INTO user (username, password, is_superuser, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (username, password_hash, True, True, now, now)
+    )
     
     conn.commit()
     user_id = cursor.lastrowid
