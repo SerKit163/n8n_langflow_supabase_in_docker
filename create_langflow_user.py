@@ -28,23 +28,62 @@ username = '{username}'
 password_hash = '{password_hash}'
 
 # Находим базу данных Langflow
+# Ищем все возможные пути
 db_paths = [
     '/app/data/.langflow/langflow.db',
     '/app/data/langflow.db',
-    '/app/.langflow/langflow.db'
+    '/app/.langflow/langflow.db',
+    '/app/data/.langflow/database.db',
+    '/app/data/database.db',
+]
+
+# Также ищем все .db файлы в директориях данных
+search_dirs = [
+    '/app/data/.langflow',
+    '/app/data',
+    '/app/.langflow',
 ]
 
 db_path = None
+
+# Сначала проверяем известные пути
 for path in db_paths:
     if os.path.exists(path):
         db_path = path
         break
 
+# Если не нашли, ищем все .db файлы в директориях
+if not db_path:
+    for search_dir in search_dirs:
+        if os.path.exists(search_dir):
+            for file in os.listdir(search_dir):
+                if file.endswith('.db'):
+                    db_path = os.path.join(search_dir, file)
+                    print(f'Найдена база данных: {{db_path}}')
+                    break
+            if db_path:
+                break
+
 if not db_path:
     print('❌ База данных Langflow не найдена!')
     print('Проверенные пути:')
     for path in db_paths:
-        print(f'  - {{path}}')
+        exists = '✓' if os.path.exists(path) else '✗'
+        print(f'  {{exists}} {{path}}')
+    print('\\nПроверенные директории:')
+    for search_dir in search_dirs:
+        exists = '✓' if os.path.exists(search_dir) else '✗'
+        print(f'  {{exists}} {{search_dir}}')
+        if os.path.exists(search_dir):
+            try:
+                files = os.listdir(search_dir)
+                print(f'    Файлы: {{", ".join(files[:10])}}')
+            except:
+                pass
+    print('\\n💡 Возможно, база данных еще не создана.')
+    print('   Попробуйте:')
+    print('   1. Открыть Langflow в браузере и дождаться полной загрузки')
+    print('   2. Затем запустить скрипт снова')
     sys.exit(1)
 
 print(f'Найдена база данных: {{db_path}}')
