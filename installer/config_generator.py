@@ -107,11 +107,13 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'WEBHOOK_URL': webhook_url if n8n_enabled else '',
         'SUPABASE_PUBLIC_URL': supabase_public_url,
         'LANGFLOW_CORS_ORIGINS': langflow_cors_origins if langflow_enabled else '*',
-        'LANGFLOW_AUTO_LOGIN': 'false' if langflow_enabled else 'true',  # Отключаем авто-логин если включен
-        'LANGFLOW_SUPERUSER': config.get('langflow_superuser', 'admin') if langflow_enabled else '',
+        # Если Langflow включен и настроен суперпользователь, отключаем авто-логин
+        'LANGFLOW_AUTO_LOGIN': 'false' if (langflow_enabled and config.get('langflow_superuser')) else 'true',
+        'LANGFLOW_SUPERUSER': config.get('langflow_superuser', '') if langflow_enabled else '',
         'LANGFLOW_SUPERUSER_PASSWORD': config.get('langflow_superuser_password', '') if langflow_enabled else '',
         'LANGFLOW_SECRET_KEY': config.get('langflow_secret_key', '') if langflow_enabled else '',
-        'LANGFLOW_NEW_USER_IS_ACTIVE': 'false' if langflow_enabled else 'true',  # Новые пользователи неактивны по умолчанию
+        # Новые пользователи неактивны по умолчанию (требуют активации администратором)
+        'LANGFLOW_NEW_USER_IS_ACTIVE': 'false' if langflow_enabled else 'true',
         # Переменные для nginx-proxy (заполняются только если routing_mode=subdomain и домены указаны)
         'VIRTUAL_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_enabled else '',
         'LETSENCRYPT_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_enabled and n8n_domain and letsencrypt_email else '',
@@ -143,7 +145,8 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
     # Заменяем все переменные в шаблоне
     # Для секретов и паролей экранируем специальные символы
     secret_keys = ['POSTGRES_PASSWORD', 'SUPABASE_ADMIN_PASSWORD', 'JWT_SECRET', 
-                   'ANON_KEY', 'SERVICE_ROLE_KEY', 'SUPABASE_ADMIN_PASSWORD_HASH']
+                   'ANON_KEY', 'SERVICE_ROLE_KEY', 'SUPABASE_ADMIN_PASSWORD_HASH',
+                   'LANGFLOW_SUPERUSER_PASSWORD', 'LANGFLOW_SECRET_KEY']
     
     for key, value in replacements.items():
         # Экранируем секреты и пароли
