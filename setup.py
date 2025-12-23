@@ -688,6 +688,72 @@ def configure_services(recommended_config: dict, hardware: dict, services_select
     return services_config
 
 
+def configure_langflow() -> dict:
+    """Настройка Langflow: суперпользователь, пароль, секретный ключ"""
+    console.print("\n[yellow]🤖 Настройка Langflow:[/yellow]")
+    
+    # Логин для суперпользователя
+    langflow_superuser = Prompt.ask(
+        "Логин для суперпользователя Langflow",
+        default="admin"
+    )
+    console.print(f"[green]✓ Логин установлен: {langflow_superuser}[/green]")
+    
+    # Пароль для суперпользователя
+    console.print("\n[cyan]Пароль для суперпользователя Langflow:[/cyan]")
+    console.print("[yellow]💡[/yellow] Этот пароль будет использоваться для входа в Langflow\n")
+    
+    generate_password_auto = Confirm.ask(
+        "Сгенерировать пароль автоматически?",
+        default=True
+    )
+    
+    if generate_password_auto:
+        langflow_superuser_password = generate_password()
+        console.print(f"[green]✓ Пароль сгенерирован: {langflow_superuser_password}[/green]")
+        console.print("[yellow]⚠ Сохраните этот пароль! Он понадобится для входа в Langflow[/yellow]")
+    else:
+        while True:
+            langflow_superuser_password = Prompt.ask(
+                "Введите пароль для суперпользователя Langflow (минимум 8 символов)",
+                password=True
+            )
+            if len(langflow_superuser_password) >= 8:
+                break
+            else:
+                console.print("[red]❌ Пароль должен быть минимум 8 символов[/red]")
+    
+    # Секретный ключ для шифрования
+    console.print("\n[cyan]Секретный ключ для Langflow:[/cyan]")
+    console.print("[yellow]💡[/yellow] Используется для шифрования чувствительных данных\n")
+    
+    generate_secret_auto = Confirm.ask(
+        "Сгенерировать секретный ключ автоматически?",
+        default=True
+    )
+    
+    if generate_secret_auto:
+        langflow_secret_key = generate_secret_key(64)
+        console.print(f"[green]✓ Секретный ключ сгенерирован[/green]")
+        console.print("[yellow]⚠ Сохраните этот ключ! Он понадобится для восстановления доступа[/yellow]")
+    else:
+        while True:
+            langflow_secret_key = Prompt.ask(
+                "Введите секретный ключ (минимум 32 символа)",
+                password=True
+            )
+            if len(langflow_secret_key) >= 32:
+                break
+            else:
+                console.print("[red]❌ Секретный ключ должен быть минимум 32 символа[/red]")
+    
+    return {
+        'langflow_superuser': langflow_superuser,
+        'langflow_superuser_password': langflow_superuser_password,
+        'langflow_secret_key': langflow_secret_key
+    }
+
+
 def configure_supabase() -> dict:
     """Настройка Supabase: пароль, ключи"""
     console.print("\n[yellow]🗄️ Настройка Supabase:[/yellow]")
@@ -893,6 +959,11 @@ def main():
         supabase_config = configure_supabase()
         services_config.update(supabase_config)
         
+        # 9.5. Настройка Langflow (суперпользователь, пароль, секретный ключ)
+        if services_selection.get('langflow_enabled', False):
+            langflow_config = configure_langflow()
+            services_config.update(langflow_config)
+        
         # 10. Объединяем конфигурацию
         full_config = {
             'routing_mode': routing_mode,
@@ -963,6 +1034,10 @@ def main():
                         console.print(f"  [green]✓[/green] N8N: {protocol}://{full_config['n8n_domain']}")
                     if full_config.get('langflow_enabled', True) and full_config.get('langflow_domain'):
                         console.print(f"  [green]✓[/green] Langflow: {protocol}://{full_config['langflow_domain']}")
+                        if full_config.get('langflow_superuser'):
+                            console.print(f"    [yellow]Логин:[/yellow] {full_config['langflow_superuser']}")
+                            if full_config.get('langflow_superuser_password'):
+                                console.print(f"    [yellow]Пароль:[/yellow] {full_config['langflow_superuser_password']}")
                     if full_config.get('supabase_domain'):
                         console.print(f"  [green]✓[/green] Supabase Studio: {protocol}://{full_config['supabase_domain']}")
                         if full_config.get('supabase_admin_login'):
@@ -979,6 +1054,10 @@ def main():
                             console.print(f"  [green]✓[/green] N8N: {base_url}{full_config.get('n8n_path', '/n8n')}")
                         if full_config.get('langflow_enabled', True):
                             console.print(f"  [green]✓[/green] Langflow: {base_url}{full_config.get('langflow_path', '/langflow')}")
+                            if full_config.get('langflow_superuser'):
+                                console.print(f"    [yellow]Логин:[/yellow] {full_config['langflow_superuser']}")
+                                if full_config.get('langflow_superuser_password'):
+                                    console.print(f"    [yellow]Пароль:[/yellow] {full_config['langflow_superuser_password']}")
                         console.print(f"  [green]✓[/green] Supabase Studio: {base_url}{full_config.get('supabase_path', '/supabase')}")
                         if full_config.get('supabase_admin_login'):
                             console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")
@@ -992,6 +1071,10 @@ def main():
                         console.print(f"  [green]✓[/green] N8N: http://localhost:{full_config.get('n8n_port', 5678)}")
                     if full_config.get('langflow_enabled', True):
                         console.print(f"  [green]✓[/green] Langflow: http://localhost:{full_config.get('langflow_port', 7860)}")
+                        if full_config.get('langflow_superuser'):
+                            console.print(f"    [yellow]Логин:[/yellow] {full_config['langflow_superuser']}")
+                            if full_config.get('langflow_superuser_password'):
+                                console.print(f"    [yellow]Пароль:[/yellow] {full_config['langflow_superuser_password']}")
                     console.print(f"  [green]✓[/green] Supabase Studio: http://localhost:{full_config.get('supabase_kb_port', 3000)}")
                     if full_config.get('supabase_admin_login'):
                         console.print(f"    [yellow]Логин:[/yellow] {full_config['supabase_admin_login']}")

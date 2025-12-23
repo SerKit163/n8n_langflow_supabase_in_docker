@@ -107,6 +107,11 @@ def generate_env_file(config: Dict, output_path: str = ".env") -> None:
         'WEBHOOK_URL': webhook_url if n8n_enabled else '',
         'SUPABASE_PUBLIC_URL': supabase_public_url,
         'LANGFLOW_CORS_ORIGINS': langflow_cors_origins if langflow_enabled else '*',
+        'LANGFLOW_AUTO_LOGIN': 'false' if langflow_enabled else 'true',  # Отключаем авто-логин если включен
+        'LANGFLOW_SUPERUSER': config.get('langflow_superuser', 'admin') if langflow_enabled else '',
+        'LANGFLOW_SUPERUSER_PASSWORD': config.get('langflow_superuser_password', '') if langflow_enabled else '',
+        'LANGFLOW_SECRET_KEY': config.get('langflow_secret_key', '') if langflow_enabled else '',
+        'LANGFLOW_NEW_USER_IS_ACTIVE': 'false' if langflow_enabled else 'true',  # Новые пользователи неактивны по умолчанию
         # Переменные для nginx-proxy (заполняются только если routing_mode=subdomain и домены указаны)
         'VIRTUAL_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_enabled else '',
         'LETSENCRYPT_HOST_N8N': n8n_domain if routing_mode == 'subdomain' and n8n_enabled and n8n_domain and letsencrypt_email else '',
